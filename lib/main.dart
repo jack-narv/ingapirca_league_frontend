@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ingapirca_league_frontend/features/auth/login_screen.dart';
 import 'core/theme/app_theme.dart';
 import 'features/home/home_screen.dart';
 
@@ -15,8 +16,8 @@ class IngaPircaLeagueApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Ingapirca League',
-      theme: AppTheme.lightTheme,
-      home: const HomeScreen(),
+      theme: AppTheme.darkTheme,
+      home: const LoginScreen(),
     );
   }
 }
