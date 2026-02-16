@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../admin/leagues/leagues_list_screen.dart';
+
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -24,11 +26,23 @@ class HomeScreen extends StatelessWidget {
                 crossAxisCount: 2,
                 crossAxisSpacing: 20,
                 mainAxisSpacing: 20,
-                children: const [
-                  _DashboardCard(title: "Teams", icon: Icons.groups),
-                  _DashboardCard(title: "Matches", icon: Icons.sports_soccer),
-                  _DashboardCard(title: "Standings", icon: Icons.leaderboard),
-                  _DashboardCard(title: "Players", icon: Icons.person),
+                children: [
+                  _DashboardCard(
+                    title: "Campeonatos",
+                    icon: Icons.emoji_events,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const AdminLeaguesListScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  _DashboardCard(title: "Equipos", icon: Icons.groups),
+                  _DashboardCard(title: "Partidos", icon: Icons.sports_soccer),
+                  _DashboardCard(title: "Estadísticas", icon: Icons.leaderboard),
+                  _DashboardCard(title: "Jugadores", icon: Icons.person),
                 ],
               ),
             ),
@@ -42,10 +56,12 @@ class HomeScreen extends StatelessWidget {
 class _DashboardCard extends StatefulWidget {
   final String title;
   final IconData icon;
+  final VoidCallback? onTap;
 
   const _DashboardCard({
     required this.title,
     required this.icon,
+    this.onTap,
   });
 
   @override
@@ -64,7 +80,7 @@ class _DashboardCardState extends State<_DashboardCard> {
         onTapDown: (_) => setState(() => _isPressed = true),
         onTapUp: (_) => setState(() => _isPressed = false),
         onTapCancel: () => setState(() => _isPressed = false),
-        onTap: () {},
+        onTap: widget.onTap,
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),

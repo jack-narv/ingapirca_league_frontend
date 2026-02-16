@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ingapirca_league_frontend/features/auth/login_screen.dart';
 import 'core/theme/app_theme.dart';
-import 'features/home/home_screen.dart';
 
 void main() {
   runApp(const IngaPircaLeagueApp());
