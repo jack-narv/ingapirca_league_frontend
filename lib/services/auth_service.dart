@@ -75,4 +75,11 @@ class AuthService {
     if (roles == null) return false;
     return roles.split(',').contains("ADMIN");
   }
+
+  Future<bool> canManageTeams() async {
+    final roles = await _storage.read(key: "roles");
+    if (roles == null) return false;
+    return roles.contains('ADMIN') ||
+          roles.contains('LEAGUE_ADMIN');
+  }
 }

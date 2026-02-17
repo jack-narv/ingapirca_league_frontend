@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
-import '../../../services/leagues_service.dart';
+import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../models/league.dart';
-import 'create_league_screen.dart';
 import '../../../services/auth_service.dart';
+import '../../../services/leagues_service.dart';
+import '../../home/home_screen.dart';
 import '../seasons/seasons_list_screen.dart';
+import 'create_league_screen.dart';
 
 class AdminLeaguesListScreen extends StatefulWidget {
   const AdminLeaguesListScreen({super.key});
 
   @override
-  State<AdminLeaguesListScreen> createState() =>
-      _AdminLeagueListScreenState();
+  State<AdminLeaguesListScreen> createState() => _AdminLeagueListScreenState();
 }
 
-class _AdminLeagueListScreenState
-    extends State<AdminLeaguesListScreen> {
+class _AdminLeagueListScreenState extends State<AdminLeaguesListScreen> {
   final LeaguesService _service = LeaguesService();
   late Future<List<League>> _leaguesFuture;
 
@@ -28,6 +28,23 @@ class _AdminLeagueListScreenState
     setState(() {
       _leaguesFuture = _service.getLeagues();
     });
+  }
+
+  void _handleBottomNavTap(int index) {
+    if (index == 0) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        (route) => false,
+      );
+      return;
+    }
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const HomeScreen(initialIndex: 1)),
+      (route) => false,
+    );
   }
 
   Widget _buildLeagueCard(League league) {
@@ -67,10 +84,7 @@ class _AdminLeagueListScreenState
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Theme.of(context)
-                    .colorScheme
-                    .primary
-                    .withOpacity(0.15),
+                color: Theme.of(context).colorScheme.primary.withOpacity(0.15),
               ),
               child: Icon(
                 Icons.emoji_events,
@@ -80,8 +94,7 @@ class _AdminLeagueListScreenState
             const SizedBox(width: 18),
             Expanded(
               child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     league.name,
@@ -112,49 +125,20 @@ class _AdminLeagueListScreenState
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment:
-            MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.emoji_events_outlined,
-            size: 60,
-            color: Colors.white24,
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            "No hay campeonatos aún",
-            style: TextStyle(
-              color: Colors.white70,
-              fontSize: 15,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildHeader() {
     return Padding(
-      padding: const EdgeInsets.only(
-          left: 24, right: 24, top: 20),
+      padding: const EdgeInsets.only(left: 24, right: 24, top: 20),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             "Campeonatos",
-            style:
-                Theme.of(context).textTheme.headlineLarge,
+            style: Theme.of(context).textTheme.headlineLarge,
           ),
           const SizedBox(height: 6),
           const Text(
             "Administra las ligas registradas",
-            style: TextStyle(
-              color: Colors.white70,
-            ),
+            style: TextStyle(color: Colors.white70),
           ),
           const SizedBox(height: 25),
         ],
@@ -164,10 +148,10 @@ class _AdminLeagueListScreenState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Admin Panel"),
-      ),
+    return AppScaffoldWithNav(
+      title: "Admin Panel",
+      currentIndex: 0,
+      onNavTap: _handleBottomNavTap,
       floatingActionButton: FutureBuilder<bool>(
         future: AuthService().isAdmin(),
         builder: (context, snapshot) {
@@ -176,14 +160,12 @@ class _AdminLeagueListScreenState
           }
 
           return FloatingActionButton(
-            backgroundColor:
-                Theme.of(context).colorScheme.primary,
+            backgroundColor: Theme.of(context).colorScheme.primary,
             onPressed: () async {
               await Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) =>
-                      const CreateLeagueScreen(),
+                  builder: (_) => const CreateLeagueScreen(),
                 ),
               );
               _refresh();
@@ -195,24 +177,21 @@ class _AdminLeagueListScreenState
       body: FutureBuilder<List<League>>(
         future: _leaguesFuture,
         builder: (context, snapshot) {
-          if (snapshot.connectionState ==
-              ConnectionState.waiting) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(
               child: CircularProgressIndicator(),
             );
           }
 
-          if (!snapshot.hasData ||
-              snapshot.data!.isEmpty) {
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return Column(
               children: [
                 _buildHeader(),
                 const Expanded(
                   child: Center(
                     child: Text(
-                      "No hay campeonatos aún",
-                      style: TextStyle(
-                          color: Colors.white70),
+                      "No hay campeonatos aun",
+                      style: TextStyle(color: Colors.white70),
                     ),
                   ),
                 ),
@@ -227,12 +206,9 @@ class _AdminLeagueListScreenState
               _buildHeader(),
               Expanded(
                 child: ListView.builder(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 24),
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
                   itemCount: leagues.length,
-                  itemBuilder: (context, index) =>
-                      _buildLeagueCard(
-                          leagues[index]),
+                  itemBuilder: (context, index) => _buildLeagueCard(leagues[index]),
                 ),
               ),
             ],

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../../services/seasons_service.dart';
+import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../core/widgets/primary_gradient_button.dart';
-
-
+import '../../../services/seasons_service.dart';
+import '../../home/home_screen.dart';
 
 class CreateSeasonScreen extends StatefulWidget {
   final String leagueId;
@@ -14,20 +14,34 @@ class CreateSeasonScreen extends StatefulWidget {
   });
 
   @override
-  State<CreateSeasonScreen> createState() =>
-      _CreateSeasonScreenState();
+  State<CreateSeasonScreen> createState() => _CreateSeasonScreenState();
 }
 
-class _CreateSeasonScreenState
-    extends State<CreateSeasonScreen> {
+class _CreateSeasonScreenState extends State<CreateSeasonScreen> {
   final _nameController = TextEditingController();
   final SeasonsService _service = SeasonsService();
+  final _formatter = DateFormat("yyyy/MM/dd");
 
   DateTime? _startDate;
   DateTime? _endDate;
   bool _loading = false;
 
-  final _formatter = DateFormat('yyyy/MM/dd');
+  void _handleBottomNavTap(int index) {
+    if (index == 0) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        (route) => false,
+      );
+      return;
+    }
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const HomeScreen(initialIndex: 1)),
+      (route) => false,
+    );
+  }
 
   Future<void> _pickDate({
     required bool isStart,
@@ -51,13 +65,9 @@ class _CreateSeasonScreenState
   }
 
   void _createSeason() async {
-    if (_nameController.text.isEmpty ||
-        _startDate == null ||
-        _endDate == null) {
+    if (_nameController.text.isEmpty || _startDate == null || _endDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Completa todos los campos"),
-        ),
+        const SnackBar(content: Text("Completa todos los campos")),
       );
       return;
     }
@@ -75,9 +85,7 @@ class _CreateSeasonScreenState
       Navigator.pop(context);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Error creando temporada"),
-        ),
+        const SnackBar(content: Text("Error creando temporada")),
       );
     } finally {
       setState(() => _loading = false);
@@ -117,10 +125,7 @@ class _CreateSeasonScreenState
       child: Container(
         width: double.infinity,
         margin: const EdgeInsets.only(bottom: 18),
-        padding: const EdgeInsets.symmetric(
-          horizontal: 18,
-          vertical: 18,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
           color: const Color(0xFF1A2332),
@@ -138,14 +143,10 @@ class _CreateSeasonScreenState
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                date == null
-                    ? label
-                    : _formatter.format(date),
+                date == null ? label : _formatter.format(date),
                 style: TextStyle(
                   fontSize: 15,
-                  color: date == null
-                      ? Colors.white70
-                      : Colors.white,
+                  color: date == null ? Colors.white70 : Colors.white,
                 ),
               ),
             ),
@@ -156,101 +157,39 @@ class _CreateSeasonScreenState
     );
   }
 
-  Widget _buildCreateButton() {
-    return Container(
-      width: double.infinity,
-      height: 55,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(30),
-        gradient: const LinearGradient(
-          colors: [
-            Color(0xFF00C853),
-            Color(0xFF22D3EE),
-          ],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.4),
-            blurRadius: 14,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(30),
-          ),
-        ),
-        onPressed: _loading ? null : _createSeason,
-        child: _loading
-            ? const SizedBox(
-                height: 22,
-                width: 22,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
-                ),
-              )
-            : const Text(
-                "Crear Temporada",
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Crear Temporada"),
-      ),
+    return AppScaffoldWithNav(
+      title: "Crear Temporada",
+      currentIndex: 0,
+      onNavTap: _handleBottomNavTap,
       body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 24,
-          vertical: 30,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 30),
         child: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               "Nueva Temporada",
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineLarge,
+              style: Theme.of(context).textTheme.headlineLarge,
             ),
             const SizedBox(height: 8),
             const Text(
-              "Define el período de competencia.",
-              style: TextStyle(
-                color: Colors.white70,
-              ),
+              "Define el periodo de competencia.",
+              style: TextStyle(color: Colors.white70),
             ),
             const SizedBox(height: 30),
-
             _buildInput(),
-
             _buildDateCard(
               label: "Selecciona fecha de inicio",
               date: _startDate,
               onTap: () => _pickDate(isStart: true),
             ),
-
             _buildDateCard(
               label: "Selecciona fecha de fin",
               date: _endDate,
               onTap: () => _pickDate(isStart: false),
             ),
-
             const SizedBox(height: 20),
-
             PrimaryGradientButton(
               text: "Crear Temporada",
               loading: _loading,
