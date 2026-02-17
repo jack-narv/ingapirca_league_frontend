@@ -68,7 +68,7 @@ class Player {
           : DateTime(1970, 1, 1),
       nationality:
           (json['nationality'] ?? '').toString(),
-      photoUrl: json['photo_url'],
+      photoUrl: json['photo_url']?.toString(),
       teamInfo: teamInfo,
     );
   }

@@ -91,6 +91,7 @@ class _PlayersListScreenState extends State<PlayersListScreen> {
               final initial = player.firstName.isNotEmpty
                   ? player.firstName[0]
                   : "?";
+              final photo = _buildPhoto(player.photoUrl);
 
               return GestureDetector(
                 behavior: HitTestBehavior.opaque,
@@ -149,6 +150,9 @@ class _PlayersListScreenState extends State<PlayersListScreen> {
                               .colorScheme
                               .primary
                               .withOpacity(0.2),
+                          foregroundImage: photo,
+                          onForegroundImageError:
+                              photo != null ? (_, _) {} : null,
                           child: Text(
                             initial,
                             style: TextStyle(
@@ -215,5 +219,11 @@ class _PlayersListScreenState extends State<PlayersListScreen> {
         ),
       ),
     );
+  }
+
+  ImageProvider<Object>? _buildPhoto(String? url) {
+    final value = url?.trim() ?? '';
+    if (value.isEmpty) return null;
+    return NetworkImage(value);
   }
 }

@@ -101,6 +101,7 @@ class _TeamsListScreenState extends State<TeamsListScreen> {
             itemCount: teams.length,
             itemBuilder: (context, index) {
               final team = teams[index];
+              final logo = _buildTeamLogo(team.logoUrl);
 
             return GestureDetector(
               onTap: () {
@@ -127,9 +128,16 @@ class _TeamsListScreenState extends State<TeamsListScreen> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(
-                        Icons.shield,
-                        size: 30,
+                      CircleAvatar(
+                        radius: 22,
+                        backgroundColor: Colors.white10,
+                        foregroundImage: logo,
+                        onForegroundImageError:
+                            logo != null ? (_, _) {} : null,
+                        child: const Icon(
+                          Icons.shield,
+                          size: 22,
+                        ),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
@@ -148,6 +156,18 @@ class _TeamsListScreenState extends State<TeamsListScreen> {
                                 "Fundado en ${team.foundedYear}",
                                 style: const TextStyle(color: Colors.white70),
                               ),
+                            const SizedBox(height: 4),
+                            Text(
+                              team.logoUrl?.trim().isNotEmpty == true
+                                  ? team.logoUrl!
+                                  : "Sin logo_url",
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white54,
+                                fontSize: 12,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -160,5 +180,11 @@ class _TeamsListScreenState extends State<TeamsListScreen> {
         },
       ),
     );
+  }
+
+  ImageProvider<Object>? _buildTeamLogo(String? url) {
+    final value = url?.trim() ?? '';
+    if (value.isEmpty) return null;
+    return NetworkImage(value);
   }
 }
