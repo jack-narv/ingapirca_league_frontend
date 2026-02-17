@@ -5,6 +5,7 @@ import '../../../services/auth_service.dart';
 import '../../../services/teams_service.dart';
 import '../../home/home_screen.dart';
 import 'create_team_screen.dart';
+import 'team_detail_screen.dart';
 
 class TeamsListScreen extends StatefulWidget {
   final String seasonId;
@@ -101,49 +102,59 @@ class _TeamsListScreenState extends State<TeamsListScreen> {
             itemBuilder: (context, index) {
               final team = teams[index];
 
-              return Container(
-                margin: const EdgeInsets.only(bottom: 16),
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(18),
-                  color: const Color(0xFF1A2332),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.4),
-                      blurRadius: 12,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.shield,
-                      size: 30,
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            team.name,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
-                          if (team.foundedYear != null)
-                            Text(
-                              "Fundado en ${team.foundedYear}",
-                              style: const TextStyle(color: Colors.white70),
-                            ),
-                        ],
+            return GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => TeamDetailScreen(team: team),
+                  ),
+                );
+              },
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(18),
+                    color: const Color(0xFF1A2332),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.4),
+                        blurRadius: 12,
+                        offset: const Offset(0, 8),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.shield,
+                        size: 30,
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              team.name,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                            if (team.foundedYear != null)
+                              Text(
+                                "Fundado en ${team.foundedYear}",
+                                style: const TextStyle(color: Colors.white70),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              );
+             );
             },
           );
         },
