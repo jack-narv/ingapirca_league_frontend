@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/widgets/app_scaffold_with_nav.dart';
 import '../admin/leagues/leagues_list_screen.dart';
+import '../admin/venues/venues_list_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final int initialIndex;
@@ -46,6 +47,19 @@ class _HomeScreenState extends State<HomeScreen> {
                       context,
                       MaterialPageRoute(
                         builder: (_) => const AdminLeaguesListScreen(),
+                      ),
+                    );
+                  },
+                ),
+                _MainDashboardCard(
+                  title: "Escenarios",
+                  subtitle: "Gestiona los estadios",
+                  icon: Icons.location_on,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const VenuesListScreen(),
                       ),
                     );
                   },
