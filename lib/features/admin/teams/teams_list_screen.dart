@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../../core/widgets/app_scaffold_with_nav.dart';
+import '../../../models/season_category.dart';
 import '../../../models/team.dart';
 import '../../../services/auth_service.dart';
+import '../../../services/seasons_service.dart';
 import '../../../services/teams_service.dart';
 import '../../home/home_screen.dart';
 import 'create_team_screen.dart';
@@ -23,17 +25,38 @@ class TeamsListScreen extends StatefulWidget {
 
 class _TeamsListScreenState extends State<TeamsListScreen> {
   final TeamsService _service = TeamsService();
+  final SeasonsService _seasonsService =
+      SeasonsService();
   late Future<List<Team>> _teamsFuture;
+  late Future<List<SeasonCategory>>
+      _categoriesFuture;
+  SeasonCategory? _selectedCategory;
 
   @override
   void initState() {
     super.initState();
     _teamsFuture = _service.getBySeason(widget.seasonId);
+    _categoriesFuture = _seasonsService
+        .getCategoriesBySeason(widget.seasonId);
   }
 
   void _refresh() {
     setState(() {
-      _teamsFuture = _service.getBySeason(widget.seasonId);
+      _teamsFuture = _service.getBySeason(
+        widget.seasonId,
+        categoryId: _selectedCategory?.id,
+      );
+    });
+  }
+
+  void _applyCategory(
+      SeasonCategory? category) {
+    setState(() {
+      _selectedCategory = category;
+      _teamsFuture = _service.getBySeason(
+        widget.seasonId,
+        categoryId: category?.id,
+      );
     });
   }
 
@@ -98,9 +121,49 @@ class _TeamsListScreenState extends State<TeamsListScreen> {
 
           return ListView.builder(
             padding: const EdgeInsets.all(20),
-            itemCount: teams.length,
+            itemCount: teams.length + 1,
             itemBuilder: (context, index) {
-              final team = teams[index];
+              if (index == 0) {
+                return FutureBuilder<List<SeasonCategory>>(
+                  future: _categoriesFuture,
+                  builder: (context, categorySnapshot) {
+                    final categories =
+                        categorySnapshot.data ?? [];
+
+                    return Container(
+                      margin: const EdgeInsets.only(
+                          bottom: 16),
+                      child: DropdownButtonFormField<
+                          SeasonCategory?>(
+                        value: _selectedCategory,
+                        decoration:
+                            const InputDecoration(
+                          labelText:
+                              "Filtrar por categoria",
+                        ),
+                        items: [
+                          const DropdownMenuItem<
+                              SeasonCategory?>(
+                            value: null,
+                            child: Text(
+                                "Todas las categorias"),
+                          ),
+                          ...categories.map((category) =>
+                              DropdownMenuItem<
+                                  SeasonCategory?>(
+                                value: category,
+                                child:
+                                    Text(category.name),
+                              )),
+                        ],
+                        onChanged: _applyCategory,
+                      ),
+                    );
+                  },
+                );
+              }
+
+              final team = teams[index - 1];
               final logo = _buildTeamLogo(team.logoUrl);
 
             return GestureDetector(

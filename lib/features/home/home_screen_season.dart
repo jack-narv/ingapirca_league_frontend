@@ -3,6 +3,7 @@ import '../../core/widgets/app_scaffold_with_nav.dart';
 import '../../models/season.dart';
 import '../admin/teams/teams_list_screen.dart';
 import 'home_screen.dart';
+import '../admin/matches/matches_list_screen.dart';
 
 class HomeScreenSeason extends StatelessWidget {
   final Season season;
@@ -73,9 +74,20 @@ class HomeScreenSeason extends StatelessWidget {
                       );
                     },
                   ),
-                  const _DashboardCard(
+                  _DashboardCard(
                     title: "Partidos",
                     icon: Icons.sports_soccer,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => MatchesListScreen(
+                            seasonId: season.id,
+                            seasonName: season.name,
+                          ),
+                        ),
+                      );
+                    },
                   ),
                   const _DashboardCard(
                     title: "Estadisticas",
@@ -94,6 +106,22 @@ class HomeScreenSeason extends StatelessWidget {
     );
   }
 }
+
+//class MatchesListScreen extends StatefulWidget {
+//  final String seasonId;
+//  final String seasonName;
+//
+//  const MatchesListScreen({
+//    super.key,
+//    required this.seasonId,
+//    required this.seasonName,
+//  });
+//
+//  @override
+//  State<MatchesListScreen> createState() =>
+//      _MatchesListScreenState();
+//}
+
 
 class _DashboardCard extends StatefulWidget {
   final String title;

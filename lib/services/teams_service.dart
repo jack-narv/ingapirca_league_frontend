@@ -8,9 +8,15 @@ import 'package:ingapirca_league_frontend/core/constants/environments.dart';
 class TeamsService{
   static const String baseUrl = Environment.baseUrl;
 
-  Future<List<Team>> getBySeason(String seasonId) async{
+  Future<List<Team>> getBySeason(
+    String seasonId, {
+    String? categoryId,
+  }) async{
+    final query = categoryId == null
+        ? ''
+        : '?categoryId=$categoryId';
     final response = await http.get(
-      Uri.parse("$baseUrl/teams/season/$seasonId"),
+      Uri.parse("$baseUrl/teams/season/$seasonId$query"),
     );
 
     if(response.statusCode == 200){
@@ -23,6 +29,7 @@ class TeamsService{
 
   Future<void> createTeam({
     required String seasonId,
+    String? categoryId,
     required String name,
     int? foundedYear,
     String? logoUrl,
@@ -37,6 +44,7 @@ class TeamsService{
       },
       body: jsonEncode({
         "season_id": seasonId,
+        "category_id": categoryId,
         "name": name,
         "founded_year": foundedYear,
         "logo_url": logoUrl,

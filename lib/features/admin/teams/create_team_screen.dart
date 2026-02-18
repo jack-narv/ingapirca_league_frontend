@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../core/widgets/primary_gradient_button.dart';
+import '../../../models/season_category.dart';
+import '../../../services/seasons_service.dart';
 import '../../../services/teams_service.dart';
 import '../../home/home_screen.dart';
 
@@ -21,8 +23,22 @@ class _CreateTeamScreenState extends State<CreateTeamScreen> {
   final _foundedController = TextEditingController();
   final _logoController = TextEditingController();
   final TeamsService _service = TeamsService();
+  final SeasonsService _seasonsService =
+      SeasonsService();
+  late Future<List<SeasonCategory>>
+      _categoriesFuture;
+  SeasonCategory? _selectedCategory;
 
   bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _categoriesFuture =
+        _seasonsService.getCategoriesBySeason(
+      widget.seasonId,
+    );
+  }
 
   void _handleBottomNavTap(int index) {
     if (index == 0) {
@@ -51,11 +67,21 @@ class _CreateTeamScreenState extends State<CreateTeamScreen> {
       return;
     }
 
+    if (_selectedCategory == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Selecciona una categoria"),
+        ),
+      );
+      return;
+    }
+
     setState(() => _loading = true);
 
     try {
       await _service.createTeam(
         seasonId: widget.seasonId,
+        categoryId: _selectedCategory!.id,
         name: _nameController.text.trim(),
         foundedYear: _foundedController.text.isEmpty
             ? null
@@ -127,6 +153,54 @@ class _CreateTeamScreenState extends State<CreateTeamScreen> {
               ),
             ),
             const SizedBox(height: 30),
+            FutureBuilder<List<SeasonCategory>>(
+              future: _categoriesFuture,
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const Padding(
+                    padding:
+                        EdgeInsets.only(bottom: 20),
+                    child: Center(
+                      child:
+                          CircularProgressIndicator(),
+                    ),
+                  );
+                }
+
+                final categories =
+                    snapshot.data!;
+
+                return Container(
+                  margin: const EdgeInsets.only(
+                      bottom: 20),
+                  child:
+                      DropdownButtonFormField<SeasonCategory>(
+                    value: _selectedCategory,
+                    decoration:
+                        const InputDecoration(
+                      labelText: "Categoria",
+                      prefixIcon:
+                          Icon(Icons.category),
+                    ),
+                    items: categories
+                        .map((category) =>
+                            DropdownMenuItem<
+                                SeasonCategory>(
+                              value: category,
+                              child:
+                                  Text(category.name),
+                            ))
+                        .toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedCategory =
+                            value;
+                      });
+                    },
+                  ),
+                );
+              },
+            ),
             _buildInput(
               controller: _nameController,
               label: "Nombre del equipo",

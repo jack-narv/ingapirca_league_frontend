@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/season.dart';
+import '../models/season_category.dart';
 import 'package:ingapirca_league_frontend/core/constants/environments.dart';
 
 
@@ -46,6 +47,47 @@ class SeasonsService {
 
     if(response.statusCode != 201){
       throw Exception("No se pudo crear la temporada");
+    }
+  }
+
+  Future<List<SeasonCategory>> getCategoriesBySeason(
+      String seasonId) async {
+    final response = await http.get(
+      Uri.parse("$baseUrl/seasons/$seasonId/categories"),
+    );
+
+    if (response.statusCode == 200) {
+      final List data = jsonDecode(response.body);
+      return data
+          .map((e) => SeasonCategory.fromJson(e))
+          .toList();
+    }
+
+    throw Exception("No se pudo cargar categorias");
+  }
+
+  Future<void> createCategory({
+    required String seasonId,
+    required String name,
+    int? sortOrder,
+  }) async {
+    final token = await _storage.read(key: "jwt");
+
+    final response = await http.post(
+      Uri.parse("$baseUrl/seasons/$seasonId/categories"),
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer $token",
+      },
+      body: jsonEncode({
+        "name": name,
+        "sort_order": sortOrder,
+      }),
+    );
+
+    if (response.statusCode != 201 &&
+        response.statusCode != 200) {
+      throw Exception("No se pudo crear la categoria");
     }
   }
 }
