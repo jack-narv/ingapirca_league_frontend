@@ -112,16 +112,9 @@ class _TeamsListScreenState extends State<TeamsListScreen> {
           }
 
           final teams = snapshot.data!;
-
-          if (teams.isEmpty) {
-            return const Center(
-              child: Text("No hay equipos aun"),
-            );
-          }
-
           return ListView.builder(
             padding: const EdgeInsets.all(20),
-            itemCount: teams.length + 1,
+            itemCount: teams.isEmpty ? 2 : teams.length + 1,
             itemBuilder: (context, index) {
               if (index == 0) {
                 return FutureBuilder<List<SeasonCategory>>(
@@ -160,6 +153,15 @@ class _TeamsListScreenState extends State<TeamsListScreen> {
                       ),
                     );
                   },
+                );
+              }
+
+              if (teams.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.only(top: 120),
+                  child: Center(
+                    child: Text("No hay equipos aun"),
+                  ),
                 );
               }
 

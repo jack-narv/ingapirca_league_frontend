@@ -14,13 +14,32 @@ class MatchLineupPlayer {
   });
 
   factory MatchLineupPlayer.fromJson(Map<String, dynamic> json) {
+    final players =
+        json['players'] is Map<String, dynamic>
+            ? json['players'] as Map<String, dynamic>
+            : <String, dynamic>{};
+
+    final firstName =
+        (players['first_name'] ?? '').toString();
+    final lastName =
+        (players['last_name'] ?? '').toString();
+    final fallbackName =
+        (json['player_name'] ?? json['player_id'] ?? '')
+            .toString();
+    final fullName =
+        '$firstName $lastName'.trim().isEmpty
+            ? fallbackName
+            : '$firstName $lastName'.trim();
+
     return MatchLineupPlayer(
-      playerId: json['player_id'],
-      playerName:
-          "${json['players']['first_name']} ${json['players']['last_name']}",
-      shirtNumber: json['shirt_number'],
-      position: json['position'],
-      isStarting: json['is_starting'],
+      playerId: (json['player_id'] ?? '').toString(),
+      playerName: fullName,
+      shirtNumber: int.tryParse(
+            (json['shirt_number'] ?? 0).toString(),
+          ) ??
+          0,
+      position: (json['position'] ?? '').toString(),
+      isStarting: json['is_starting'] == true,
     );
   }
 

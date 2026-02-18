@@ -132,16 +132,6 @@ class _MatchesListScreenState
             }
 
             final matches = snapshot.data!;
-
-            if (matches.isEmpty) {
-              return const Center(
-                child: Text(
-                  "No hay partidos programados",
-                  style: TextStyle(color: Colors.white70),
-                ),
-              );
-            }
-
             return ListView(
               padding: const EdgeInsets.all(20),
               children: [
@@ -182,10 +172,20 @@ class _MatchesListScreenState
                     );
                   },
                 ),
-                ...matches
-                    .map((match) =>
-                        _buildMatchCard(match))
-                    .toList(),
+                if (matches.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 120),
+                    child: Center(
+                      child: Text(
+                        "No hay partidos programados",
+                        style: TextStyle(
+                            color: Colors.white70),
+                      ),
+                    ),
+                  ),
+                ...matches.map(
+                  (match) => _buildMatchCard(match),
+                ),
               ],
             );
           },
