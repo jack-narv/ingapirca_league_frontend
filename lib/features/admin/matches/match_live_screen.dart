@@ -135,6 +135,7 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
     return _decorateEvent({
       'event_type': e.eventType,
       'minute': e.minute,
+      'team_id': e.teamId,
       'player_id': e.playerId,
       'player_name': e.playerName,
       'shirt_number': e.shirtNumber,
@@ -142,23 +143,54 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
   }
 
   Map<String, dynamic> _decorateEvent(Map<String, dynamic> raw) {
+    final explicitTeamId = (raw['team_id'] ?? '').toString();
     final playerId = (raw['player_id'] ?? '').toString();
     MatchLineupPlayer? player;
+    String inferredTeamId = explicitTeamId;
 
     if (playerId.isNotEmpty) {
-      for (final p in [..._homeLineup, ..._awayLineup]) {
+      for (final p in _homeLineup) {
         if (p.playerId == playerId) {
           player = p;
+          inferredTeamId = _match?.homeTeamId ?? inferredTeamId;
           break;
+        }
+      }
+
+      if (player == null) {
+        for (final p in _awayLineup) {
+          if (p.playerId == playerId) {
+            player = p;
+            inferredTeamId = _match?.awayTeamId ?? inferredTeamId;
+            break;
+          }
         }
       }
     }
 
+    final rawTeamName = (raw['team_name'] ?? '').toString();
+    final teamName = rawTeamName.isNotEmpty
+        ? rawTeamName
+        : _teamNameFromId(inferredTeamId);
+
     return {
       ...raw,
+      'team_id': inferredTeamId,
+      'team_name': teamName,
       'player_name': raw['player_name'] ?? player?.playerName,
       'shirt_number': raw['shirt_number'] ?? player?.shirtNumber,
     };
+  }
+
+  String _teamNameFromId(String teamId) {
+    if (teamId.isEmpty) return '';
+    if (teamId == _match?.homeTeamId) {
+      return _homeTeam?.name ?? '';
+    }
+    if (teamId == _match?.awayTeamId) {
+      return _awayTeam?.name ?? '';
+    }
+    return '';
   }
 
   Future<void> _addEvent() async {
@@ -386,6 +418,10 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
     final minute = e['minute']?.toString();
     final playerName = (e['player_name'] ?? '').toString();
     final shirt = e['shirt_number']?.toString();
+    final teamName = (e['team_name'] ?? '').toString();
+    final teamNameResolved = teamName.isNotEmpty
+        ? teamName
+        : _teamNameFromId((e['team_id'] ?? '').toString());
     final desc = (e['description'] ?? e['detail'] ?? '').toString();
 
     final icon = _eventIcon(type);
@@ -441,6 +477,16 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
                         : '$playerName (#$shirt)',
                     style: const TextStyle(
                       color: Colors.white60,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+                if (teamNameResolved.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    teamNameResolved,
+                    style: const TextStyle(
+                      color: Colors.white54,
                       fontSize: 12,
                     ),
                   ),

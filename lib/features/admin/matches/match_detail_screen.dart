@@ -44,6 +44,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
   final List<Map<String, dynamic>> _events = [];
   final Map<String, String> _playerNamesById = {};
   final Map<String, int> _shirtByPlayerId = {};
+  final Map<String, String> _teamIdByPlayerId = {};
 
   StreamSubscription? _scoreSub;
   StreamSubscription? _eventSub;
@@ -202,10 +203,18 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
 
       _playerNamesById.clear();
       _shirtByPlayerId.clear();
+      _teamIdByPlayerId.clear();
 
-      for (final p in [...home, ...away]) {
+      for (final p in home) {
         _playerNamesById[p.playerId] = p.playerName;
         _shirtByPlayerId[p.playerId] = p.shirtNumber;
+        _teamIdByPlayerId[p.playerId] = _match.homeTeamId;
+      }
+
+      for (final p in away) {
+        _playerNamesById[p.playerId] = p.playerName;
+        _shirtByPlayerId[p.playerId] = p.shirtNumber;
+        _teamIdByPlayerId[p.playerId] = _match.awayTeamId;
       }
     } catch (_) {
       // keep best-effort caches
@@ -236,6 +245,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
       'id': e.id,
       'event_type': e.eventType,
       'minute': e.minute,
+      'team_id': e.teamId,
       'player_id': e.playerId,
       'player_name': e.playerName,
       'shirt_number': e.shirtNumber,
@@ -245,12 +255,20 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
   Map<String, dynamic> _normalizeEvent(Map<String, dynamic> raw) {
     final playerId = (raw['player_id'] ?? '').toString();
     final playerName = (raw['player_name'] ?? '').toString();
+    final explicitTeamId = (raw['team_id'] ?? '').toString();
+    final inferredTeamId = explicitTeamId.isNotEmpty
+        ? explicitTeamId
+        : (_teamIdByPlayerId[playerId] ?? '');
+    final rawTeamName = (raw['team_name'] ?? '').toString();
+    final mappedTeamName = _teamNameOrEmpty(inferredTeamId);
 
     return {
       ...raw,
       'event_type':
           (raw['event_type'] ?? raw['type'] ?? 'EVENT').toString(),
       'minute': int.tryParse((raw['minute'] ?? 0).toString()) ?? 0,
+      'team_id': inferredTeamId,
+      'team_name': rawTeamName.isNotEmpty ? rawTeamName : mappedTeamName,
       'player_name': playerName.isNotEmpty
           ? playerName
           : (_playerNamesById[playerId] ?? playerId),
@@ -509,6 +527,12 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
           final type = (e['event_type'] ?? 'EVENT').toString();
           final playerName = (e['player_name'] ?? '').toString();
           final shirt = e['shirt_number']?.toString();
+          final teamName = (e['team_name'] ?? '').toString();
+          final teamNameResolved = teamName.isNotEmpty
+              ? teamName
+              : _teamNameOrEmpty((e['team_id'] ?? '').toString());
+          final icon = _eventIcon(type);
+          final color = _eventColor(type);
 
           return Container(
             padding: const EdgeInsets.all(14),
@@ -518,6 +542,15 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
             ),
             child: Row(
               children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: color.withValues(alpha: 0.15),
+                  ),
+                  child: Icon(icon, color: color),
+                ),
+                const SizedBox(width: 12),
                 Text(
                   "$minute'",
                   style: const TextStyle(
@@ -529,7 +562,10 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(type, style: const TextStyle(fontWeight: FontWeight.w700)),
+                      Text(
+                        type,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
                       const SizedBox(height: 4),
                       Text(
                         shirt == null || shirt.isEmpty
@@ -539,6 +575,18 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(color: Colors.white70),
                       ),
+                      if (teamNameResolved.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          teamNameResolved,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white54,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -732,6 +780,11 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
     return _teamsById[teamId]?.name ?? teamId;
   }
 
+  String _teamNameOrEmpty(String teamId) {
+    if (teamId.isEmpty) return '';
+    return _teamsById[teamId]?.name ?? '';
+  }
+
   Widget _teamInfo({
     required String teamId,
     required bool alignEnd,
@@ -795,5 +848,43 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
           ),
       ],
     );
+  }
+
+  IconData _eventIcon(String type) {
+    switch (type.toUpperCase()) {
+      case 'GOAL':
+        return Icons.sports_soccer;
+      case 'YELLOW_CARD':
+      case 'YELLOW':
+        return Icons.square;
+      case 'RED_CARD':
+      case 'RED':
+        return Icons.block;
+      case 'SUBSTITUTION':
+      case 'SUB_IN':
+      case 'SUB_OUT':
+        return Icons.swap_horiz;
+      default:
+        return Icons.bolt;
+    }
+  }
+
+  Color _eventColor(String type) {
+    switch (type.toUpperCase()) {
+      case 'GOAL':
+        return Colors.greenAccent;
+      case 'YELLOW_CARD':
+      case 'YELLOW':
+        return Colors.amber;
+      case 'RED_CARD':
+      case 'RED':
+        return Colors.redAccent;
+      case 'SUBSTITUTION':
+      case 'SUB_IN':
+      case 'SUB_OUT':
+        return Colors.cyanAccent;
+      default:
+        return Colors.blueGrey;
+    }
   }
 }
