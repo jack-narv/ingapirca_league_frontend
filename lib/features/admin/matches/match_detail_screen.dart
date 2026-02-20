@@ -4,6 +4,7 @@ import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../models/match.dart';
 import '../../../models/match_event.dart';
 import '../../../models/match_lineup.dart';
+import '../../../models/match_observations.dart';
 import '../../../models/team.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/live_match_service.dart';
@@ -11,6 +12,7 @@ import '../../../services/match_events_service.dart';
 import '../../../services/match_lineups_service.dart';
 import '../../../services/matches_service.dart';
 import '../../../services/teams_service.dart';
+import 'finalize_match_screen.dart';
 import 'match_lineup_screen.dart';
 import 'match_live_screen.dart';
 
@@ -45,6 +47,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
   final Map<String, String> _playerNamesById = {};
   final Map<String, int> _shirtByPlayerId = {};
   final Map<String, String> _teamIdByPlayerId = {};
+  final List<MatchObservation> _teamObservations = [];
 
   StreamSubscription? _scoreSub;
   StreamSubscription? _eventSub;
@@ -53,6 +56,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
 
   bool _loading = false;
   bool _eventsLoading = true;
+  bool _observationsLoading = true;
 
   @override
   void initState() {
@@ -86,6 +90,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
     await _loadTeams();
     await _loadEvents();
     await _loadLineupCaches();
+    await _loadTeamObservations();
   }
 
   Future<void> _initLive() async {
@@ -240,6 +245,24 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
     }
   }
 
+  Future<void> _loadTeamObservations() async {
+    setState(() => _observationsLoading = true);
+    try {
+      final observations =
+          await _service.getTeamObservationsByMatch(_match.id);
+      if (!mounted) return;
+      setState(() {
+        _teamObservations
+          ..clear()
+          ..addAll(observations);
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _observationsLoading = false);
+      }
+    }
+  }
+
   Map<String, dynamic> _eventToMap(MatchEvent e) {
     return {
       'id': e.id,
@@ -287,55 +310,20 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
   }
 
   Future<void> _finishMatchDialog() async {
-    final homeController = TextEditingController();
-    final awayController = TextEditingController();
-
-    await showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+    final finalized = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => FinalizeMatchScreen(
+          match: _match,
+          homeTeamName: _teamName(_match.homeTeamId),
+          awayTeamName: _teamName(_match.awayTeamId),
         ),
-        title: const Text('Finalizar partido'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: homeController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Goles Local'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: awayController,
-              keyboardType: TextInputType.number,
-              decoration:
-                  const InputDecoration(labelText: 'Goles Visitante'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await _service.finishMatch(
-                _match.id,
-                int.tryParse(homeController.text) ?? 0,
-                int.tryParse(awayController.text) ?? 0,
-                null,
-              );
-              await _refresh();
-            },
-            child: const Text('Finalizar'),
-          ),
-        ],
       ),
     );
+
+    if (finalized == true) {
+      await _refresh();
+    }
   }
 
   Future<void> _cancelMatch() async {
@@ -744,35 +732,127 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
   Widget _buildObservationsTab() {
     final obs = (_match.observations ?? '').trim();
 
-    return ListView(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            color: const Color(0xFF1A2332),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Observaciones del partido',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              color: const Color(0xFF1A2332),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Observación del vocal',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                obs.isEmpty
-                    ? 'Sin observaciones registradas.'
-                    : obs,
-                style: const TextStyle(color: Colors.white70),
-              ),
-            ],
+                const SizedBox(height: 10),
+                Text(
+                  obs.isEmpty
+                      ? 'Sin observaciones registradas.'
+                      : obs,
+                  style: const TextStyle(color: Colors.white70),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              color: const Color(0xFF1A2332),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Observaciones de equipos',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                if (_observationsLoading)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                  )
+                else if (_teamObservations.isEmpty)
+                  const Text(
+                    'Sin observaciones de equipos registradas.',
+                    style: TextStyle(color: Colors.white70),
+                  )
+                else
+                  Column(
+                    children: _teamObservations.map((o) {
+                      final submittedAt = o.submittedAt.toLocal();
+                      final dateText =
+                          '${submittedAt.day.toString().padLeft(2, '0')}/'
+                          '${submittedAt.month.toString().padLeft(2, '0')}/'
+                          '${submittedAt.year} '
+                          '${submittedAt.hour.toString().padLeft(2, '0')}:'
+                          '${submittedAt.minute.toString().padLeft(2, '0')}';
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          crossAxisAlignment:
+                              CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              o.teamName ?? _teamName(o.teamId),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              o.observation,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Reporta: ${o.submittedByName ?? o.submittedBy}',
+                              style: const TextStyle(
+                                color: Colors.white54,
+                                fontSize: 12,
+                              ),
+                            ),
+                            Text(
+                              'Estado: ${o.status} • $dateText',
+                              style: const TextStyle(
+                                color: Colors.white54,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

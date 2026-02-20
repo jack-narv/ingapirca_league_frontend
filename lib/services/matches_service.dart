@@ -1,12 +1,16 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/match.dart';
+import '../models/match_observations.dart';
 import 'auth_service.dart';
+import 'match_observations_service.dart';
 import 'package:ingapirca_league_frontend/core/constants/environments.dart';
 
 class MatchesService {
   static const String baseUrl = Environment.baseUrl;
   final AuthService _auth = AuthService();
+  final MatchObservationsService _matchObservationsService =
+      MatchObservationsService();
 
   Future<Map<String, String>> _headers() async {
     final token = await _auth.getToken();
@@ -144,5 +148,43 @@ class MatchesService {
     if (res.statusCode != 200) {
       throw Exception("Error cancelando el partido");
     }
+  }
+
+  // ============================
+  // MATCH OBSERVATIONS (TEAM)
+  // ============================
+
+  Future<List<MatchObservation>> getTeamObservationsByMatch(
+    String matchId,
+  ) {
+    return _matchObservationsService.getByMatch(matchId);
+  }
+
+  Future<List<MatchObservation>> getTeamObservations({
+    String? matchId,
+    String? teamId,
+    String? status,
+  }) {
+    return _matchObservationsService.getAll(
+      matchId: matchId,
+      teamId: teamId,
+      status: status,
+    );
+  }
+
+  Future<void> submitTeamObservation({
+    required String matchId,
+    required String teamId,
+    required String submittedBy,
+    required String observation,
+    String? status,
+  }) {
+    return _matchObservationsService.submitObservation(
+      matchId: matchId,
+      teamId: teamId,
+      submittedBy: submittedBy,
+      observation: observation,
+      status: status,
+    );
   }
 }
