@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/widgets/app_scaffold_with_nav.dart';
 import '../../models/season.dart';
+import '../admin/standings/standings_screen.dart';
 import '../admin/teams/teams_list_screen.dart';
 import 'home_screen.dart';
 import '../admin/matches/matches_list_screen.dart';
@@ -93,9 +94,20 @@ class HomeScreenSeason extends StatelessWidget {
                     title: "Estadisticas",
                     icon: Icons.leaderboard,
                   ),
-                  const _DashboardCard(
-                    title: "Jugadores",
-                    icon: Icons.person,
+                  _DashboardCard(
+                    title: "Clasificacion",
+                    icon: Icons.emoji_events_outlined,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => StandingsScreen(
+                            seasonId: season.id,
+                            seasonName: season.name,
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -164,7 +176,7 @@ class _DashboardCardState extends State<_DashboardCard> {
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.4),
+                color: Colors.black.withValues(alpha: 0.4),
                 blurRadius: 12,
                 offset: const Offset(0, 8),
               ),
