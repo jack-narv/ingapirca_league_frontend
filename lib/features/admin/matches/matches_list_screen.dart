@@ -36,6 +36,7 @@ class _MatchesListScreenState
     late Future<List<SeasonCategory>>
         _categoriesFuture;
     SeasonCategory? _selectedCategory;
+    String? _selectedJournal;
     Map<String, Team> _teamsById = {};
 
     @override
@@ -81,6 +82,7 @@ class _MatchesListScreenState
     ) async {
       setState(() {
         _selectedCategory = category;
+        _selectedJournal = null;
         _future = _service.getBySeason(
           widget.seasonId,
           categoryId: category?.id,
@@ -132,6 +134,12 @@ class _MatchesListScreenState
             }
 
             final matches = snapshot.data!;
+            final journals = _extractJournals(matches);
+            final filteredMatches = _selectedJournal == null
+                ? matches
+                : matches
+                    .where((m) => m.journal == _selectedJournal)
+                    .toList();
             return ListView(
               padding: const EdgeInsets.all(20),
               children: [
@@ -172,7 +180,44 @@ class _MatchesListScreenState
                     );
                   },
                 ),
-                if (matches.isEmpty)
+                if (journals.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: const Text("Todas"),
+                            selected: _selectedJournal == null,
+                            onSelected: (_) {
+                              setState(() => _selectedJournal = null);
+                            },
+                          ),
+                        ),
+                        ...journals.map((journal) {
+                          final selected = _selectedJournal == journal;
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: ChoiceChip(
+                              label: Text(_journalLabelEs(journal)),
+                              selected: selected,
+                              onSelected: (_) {
+                                setState(() {
+                                  _selectedJournal =
+                                      selected ? null : journal;
+                                });
+                              },
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                ],
+                if (filteredMatches.isEmpty)
                   const Padding(
                     padding: EdgeInsets.only(top: 120),
                     child: Center(
@@ -183,7 +228,7 @@ class _MatchesListScreenState
                       ),
                     ),
                   ),
-                ...matches.map(
+                ...filteredMatches.map(
                   (match) => _buildMatchCard(match),
                 ),
               ],
@@ -230,7 +275,15 @@ class _MatchesListScreenState
             crossAxisAlignment:
                 CrossAxisAlignment.start,
             children: [
-              _statusBadge(match.status),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _statusBadge(match.status),
+                  if ((match.journal ?? '').trim().isNotEmpty)
+                    _journalBadge(match.journal!),
+                ],
+              ),
               const SizedBox(height: 16),
               Row(
                 mainAxisAlignment:
@@ -327,7 +380,7 @@ class _MatchesListScreenState
               BorderRadius.circular(20),
         ),
         child: Text(
-          status,
+          _statusLabelEs(status),
           style: TextStyle(
             color: color,
             fontSize: 12,
@@ -335,6 +388,92 @@ class _MatchesListScreenState
           ),
         ),
       );
+    }
+
+    String _statusLabelEs(String status) {
+      switch (status.toUpperCase()) {
+        case 'SCHEDULED':
+          return 'POR JUGAR';
+        case 'PLAYING':
+          return 'JUGANDO';
+        case 'PLAYED':
+          return 'TERMINADO';
+        case 'CANCELED':
+          return 'CANCELADO';
+        default:
+          return status;
+      }
+    }
+
+    Widget _journalBadge(String journal) {
+      final label = _journalLabelEs(journal);
+
+      return Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 10,
+          vertical: 4,
+        ),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFF2D55).withValues(alpha: 0.18),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: const Color(0xFFFF2D55).withValues(alpha: 0.8),
+            width: 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: Color(0xFFFF7A92),
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      );
+    }
+
+    String _journalLabelEs(String journal) {
+      final normalized = journal.trim();
+      final match = RegExp(r'^JOURNAL\s+(\d+)$', caseSensitive: false)
+          .firstMatch(normalized);
+      if (match != null) {
+        return 'Jornada ${match.group(1)}';
+      }
+
+      if (RegExp(r'^\d+$').hasMatch(normalized)) {
+        return 'Jornada $normalized';
+      }
+
+      return normalized
+          .replaceAll('_', ' ')
+          .toUpperCase();
+    }
+
+    List<String> _extractJournals(List<Match> matches) {
+      final journals = matches
+          .map((m) => (m.journal ?? '').trim())
+          .where((j) => j.isNotEmpty)
+          .toSet()
+          .toList();
+
+      journals.sort((a, b) {
+        final aNum = RegExp(r'^JOURNAL\s+(\d+)$', caseSensitive: false)
+            .firstMatch(a);
+        final bNum = RegExp(r'^JOURNAL\s+(\d+)$', caseSensitive: false)
+            .firstMatch(b);
+
+        if (aNum != null && bNum != null) {
+          final aValue = int.parse(aNum.group(1)!);
+          final bValue = int.parse(bNum.group(1)!);
+          return aValue.compareTo(bValue);
+        }
+
+        if (aNum != null) return -1;
+        if (bNum != null) return 1;
+        return a.compareTo(b);
+      });
+
+      return journals;
     }
 
     Widget _teamInfo({

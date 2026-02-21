@@ -125,6 +125,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
           id: _match.id,
           seasonId: _match.seasonId,
           categoryId: _match.categoryId,
+          journal: _match.journal,
           homeTeamId: _match.homeTeamId,
           awayTeamId: _match.awayTeamId,
           venueId: _match.venueId,
@@ -148,6 +149,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
           id: _match.id,
           seasonId: _match.seasonId,
           categoryId: _match.categoryId,
+          journal: _match.journal,
           homeTeamId: _match.homeTeamId,
           awayTeamId: _match.awayTeamId,
           venueId: _match.venueId,
@@ -184,6 +186,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
           id: _match.id,
           seasonId: _match.seasonId,
           categoryId: _match.categoryId,
+          journal: _match.journal,
           homeTeamId: _match.homeTeamId,
           awayTeamId: _match.awayTeamId,
           venueId: _match.venueId,
@@ -489,13 +492,23 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
       ),
       child: Column(
         children: [
-          Text(
-            _match.status,
-            style: const TextStyle(
-              color: Colors.orange,
-              fontWeight: FontWeight.w600,
-              fontSize: 18,
-            ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                _statusLabelEs(_match.status),
+                style: const TextStyle(
+                  color: Colors.orange,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 18,
+                ),
+              ),
+              if ((_match.journal ?? '').trim().isNotEmpty)
+                _journalBadge(_match.journal!),
+            ],
           ),
           const SizedBox(height: 18),
           Row(
@@ -530,6 +543,48 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
         ],
       ),
     );
+  }
+
+  Widget _journalBadge(String journal) {
+    final label = _journalLabelEs(journal);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: 4,
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFF2D55).withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFFFF2D55).withValues(alpha: 0.8),
+          width: 1,
+        ),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Color(0xFFFF7A92),
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  String _journalLabelEs(String journal) {
+    final normalized = journal.trim();
+    final match = RegExp(r'^JOURNAL\s+(\d+)$', caseSensitive: false)
+        .firstMatch(normalized);
+    if (match != null) {
+      return 'Jornada ${match.group(1)}';
+    }
+
+    if (RegExp(r'^\d+$').hasMatch(normalized)) {
+      return 'Jornada $normalized';
+    }
+
+    return normalized.replaceAll('_', ' ').toUpperCase();
   }
 
   Widget _buildAdminActions() {
@@ -974,7 +1029,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
                 else
                   Column(
                     children: _teamObservations.map((o) {
-                      final submittedAt = o.submittedAt.toLocal();
+                      final submittedAt = o.submittedAt;
                       final dateText =
                           '${submittedAt.day.toString().padLeft(2, '0')}/'
                           '${submittedAt.month.toString().padLeft(2, '0')}/'
@@ -1071,7 +1126,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
                             orElse: () => null,
                           );
 
-                      final submittedAt = r.submittedAt?.toLocal();
+                      final submittedAt = r.submittedAt;
                       final dateText = submittedAt == null
                           ? ''
                           : '${submittedAt.day.toString().padLeft(2, '0')}/'
@@ -1176,7 +1231,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
                 else
                   Column(
                     children: _refereeObservations.map((o) {
-                      final submittedAt = o.submittedAt?.toLocal();
+                      final submittedAt = o.submittedAt;
                       final dateText = submittedAt == null
                           ? ''
                           : '${submittedAt.day.toString().padLeft(2, '0')}/'
@@ -1380,5 +1435,20 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
         );
       }),
     );
+  }
+
+  String _statusLabelEs(String status) {
+    switch (status.toUpperCase()) {
+      case 'SCHEDULED':
+        return 'POR JUGAR';
+      case 'PLAYING':
+        return 'JUGANDO';
+      case 'PLAYED':
+        return 'TERMINADO';
+      case 'CANCELED':
+        return 'CANCELADO';
+      default:
+        return status;
+    }
   }
 }

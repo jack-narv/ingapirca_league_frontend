@@ -16,13 +16,26 @@ class Season {
   });
 
   factory Season.fromJson(Map<String, dynamic> json) {
+    DateTime parseDateOnly(dynamic raw) {
+      final text = raw?.toString() ?? '';
+      final core = text.length >= 10 ? text.substring(0, 10) : text;
+      final parts = core.split('-');
+      if (parts.length == 3) {
+        final year = int.tryParse(parts[0]) ?? 1970;
+        final month = int.tryParse(parts[1]) ?? 1;
+        final day = int.tryParse(parts[2]) ?? 1;
+        return DateTime(year, month, day);
+      }
+      return DateTime.parse(text);
+    }
+
     return Season(
       id: json['id'],
       leagueId: json['league_id'],
       name: json['name'],
       status: json['status'],
-      startDate: DateTime.parse(json['start_date']),
-      endDate: DateTime.parse(json['end_date']),
+      startDate: parseDateOnly(json['start_date']),
+      endDate: parseDateOnly(json['end_date']),
     );
   }
 }

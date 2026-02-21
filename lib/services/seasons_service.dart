@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/season.dart';
 import '../models/season_category.dart';
 import 'package:ingapirca_league_frontend/core/constants/environments.dart';
+import 'package:ingapirca_league_frontend/core/utils/ecuador_time.dart';
 
 
 class SeasonsService {
@@ -40,8 +41,8 @@ class SeasonsService {
       body: jsonEncode({
         "league_id": leagueId,
         "name": name,
-        "start_date": startDate.toIso8601String(),
-        "end_date": endDate.toIso8601String(),
+        "start_date": EcuadorTime.dateOnlyIso(startDate),
+        "end_date": EcuadorTime.dateOnlyIso(endDate),
       }),
     );
 

@@ -1,3 +1,5 @@
+import 'package:ingapirca_league_frontend/core/utils/ecuador_time.dart';
+
 class MatchObservation {
   final String id;
   final String matchId;
@@ -34,7 +36,9 @@ class MatchObservation {
       teamId: json['team_id'],
       submittedBy: json['submitted_by'],
       observation: json['observation'],
-      submittedAt: DateTime.parse(json['submitted_at']),
+      submittedAt: EcuadorTime.parseServerToEcuador(
+        json['submitted_at'].toString(),
+      ),
       status: json['status'],
       teamName: team?['name'],
       submittedByName: fullName.isEmpty ? null : fullName,

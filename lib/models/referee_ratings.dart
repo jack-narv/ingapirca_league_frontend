@@ -1,3 +1,5 @@
+import 'package:ingapirca_league_frontend/core/utils/ecuador_time.dart';
+
 class RefereeRating {
   final String id;
   final String matchId;
@@ -47,14 +49,18 @@ class RefereeRating {
       comment: json['comment']?.toString(),
       submittedAt: submittedAtRaw == null
           ? null
-          : DateTime.tryParse(submittedAtRaw.toString()),
+          : EcuadorTime.parseServerToEcuador(
+              submittedAtRaw.toString(),
+            ),
       refereeName: refereeName,
       teamName: team is Map<String, dynamic>
           ? team['name']?.toString()
           : null,
       matchDate: matchDateRaw == null
           ? null
-          : DateTime.tryParse(matchDateRaw.toString()),
+          : EcuadorTime.parseServerToEcuador(
+              matchDateRaw.toString(),
+            ),
       matchStatus: match is Map<String, dynamic>
           ? match['status']?.toString()
           : null,

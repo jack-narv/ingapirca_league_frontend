@@ -4,6 +4,7 @@ import '../models/player.dart';
 import '../models/team_player.dart';
 import 'auth_service.dart';
 import 'package:ingapirca_league_frontend/core/constants/environments.dart';
+import 'package:ingapirca_league_frontend/core/utils/ecuador_time.dart';
 
 class PlayersService {
   static const String baseUrl = Environment.baseUrl;
@@ -84,7 +85,7 @@ class PlayersService {
       body: jsonEncode({
         "first_name": firstName,
         "last_name": lastName,
-        "date_of_birth": birthDate.toIso8601String(),
+        "date_of_birth": EcuadorTime.dateOnlyIso(birthDate),
         "nationality": nationality,
         "photo_url": photoUrl,
       }),

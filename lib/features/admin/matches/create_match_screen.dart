@@ -47,6 +47,8 @@ class _CreateMatchScreenState
   Team? _homeTeam;
   Team? _awayTeam;
   Venue? _venue;
+  String? _selectedLeagueJournal;
+  String? _selectedKnockoutJournal;
   Referee? _mainReferee;
   Referee? _assistant1Referee;
   Referee? _assistant2Referee;
@@ -59,6 +61,13 @@ class _CreateMatchScreenState
 
   final _formatter =
       DateFormat('yyyy/MM/dd HH:mm');
+  static const List<String> _knockoutJournalOptions = [
+    'ROUND OF 32',
+    'ROUND OF 8',
+    'QUARTERFINALS',
+    'SEMIFINAL',
+    'FINAL',
+  ];
 
   @override
   void initState() {
@@ -124,6 +133,9 @@ class _CreateMatchScreenState
   }
 
   Future<void> _createMatch() async {
+    final selectedJournal =
+        _selectedKnockoutJournal ?? _selectedLeagueJournal;
+
     if (_homeTeam == null ||
         _awayTeam == null ||
         _venue == null ||
@@ -134,6 +146,17 @@ class _CreateMatchScreenState
         const SnackBar(
           content:
               Text("Completa todos los campos"),
+        ),
+      );
+      return;
+    }
+
+    if (selectedJournal == null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+        const SnackBar(
+          content: Text(
+              "Selecciona un journal de liga o de eliminacion"),
         ),
       );
       return;
@@ -173,6 +196,7 @@ class _CreateMatchScreenState
           await _matchesService.createMatch(
         seasonId: widget.seasonId,
         categoryId: _selectedCategory!.id,
+        journal: selectedJournal,
         homeTeamId: _homeTeam!.id,
         awayTeamId: _awayTeam!.id,
         venueId: _venue!.id,
@@ -346,6 +370,8 @@ class _CreateMatchScreenState
                   _selectedCategory = v;
                   _homeTeam = null;
                   _awayTeam = null;
+                  _selectedLeagueJournal = null;
+                  _selectedKnockoutJournal = null;
                   _teamsFuture =
                       _teamsService.getBySeason(
                     widget.seasonId,
@@ -367,6 +393,8 @@ class _CreateMatchScreenState
 
                 final teams =
                     snapshot.data!;
+                final leagueJournalOptions =
+                    _buildLeagueJournalOptions(teams.length);
 
                 return Column(
                   children: [
@@ -397,6 +425,38 @@ class _CreateMatchScreenState
                         () => _awayTeam =
                             v,
                       ),
+                    ),
+                    _buildDropdownCard<String?>(
+                      label: "Jornada de Liga",
+                      value: _selectedLeagueJournal,
+                      items: [null, ...leagueJournalOptions],
+                      getLabel: (journal) => journal == null
+                          ? "Sin seleccionar"
+                          : _leagueJournalDisplayLabel(journal),
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedLeagueJournal = value;
+                          if (value != null) {
+                            _selectedKnockoutJournal = null;
+                          }
+                        });
+                      },
+                    ),
+                    _buildDropdownCard<String?>(
+                      label: "Jornada de Eliminación",
+                      value: _selectedKnockoutJournal,
+                      items: [null, ..._knockoutJournalOptions],
+                      getLabel: (journal) => journal == null
+                          ? "Sin seleccionar"
+                          : journal,
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedKnockoutJournal = value;
+                          if (value != null) {
+                            _selectedLeagueJournal = null;
+                          }
+                        });
+                      },
                     ),
                   ],
                 );
@@ -633,5 +693,26 @@ class _CreateMatchScreenState
   void dispose() {
     _observationsController.dispose();
     super.dispose();
+  }
+
+  List<String> _buildLeagueJournalOptions(int teamsCount) {
+    if (teamsCount < 2) return [];
+    final totalJournals = (teamsCount * 2) - 2;
+    return List.generate(
+      totalJournals,
+      (index) => "JOURNAL ${index + 1}",
+    );
+  }
+
+  String _leagueJournalDisplayLabel(String journal) {
+    final normalized = journal.trim();
+    final match = RegExp(
+      r'^JOURNAL\s+(\d+)$',
+      caseSensitive: false,
+    ).firstMatch(normalized);
+    if (match != null) {
+      return 'JORNADA ${match.group(1)}';
+    }
+    return normalized;
   }
 }

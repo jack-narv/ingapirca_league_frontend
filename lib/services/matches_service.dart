@@ -5,6 +5,7 @@ import '../models/match_observations.dart';
 import 'auth_service.dart';
 import 'match_observations_service.dart';
 import 'package:ingapirca_league_frontend/core/constants/environments.dart';
+import 'package:ingapirca_league_frontend/core/utils/ecuador_time.dart';
 
 class MatchRefereeAssignmentInput {
   final String refereeId;
@@ -28,6 +29,25 @@ class MatchesService {
       "Content-Type": "application/json",
       "Authorization": "Bearer $token",
     };
+  }
+
+  String _extractErrorMessage(http.Response res, String fallback) {
+    try {
+      final decoded = jsonDecode(res.body);
+
+      if (decoded is Map<String, dynamic>) {
+        final message = decoded['message'];
+        if (message is String && message.trim().isNotEmpty) {
+          return message.trim();
+        }
+
+        if (message is List && message.isNotEmpty) {
+          return message.map((e) => e.toString()).join(', ');
+        }
+      }
+    } catch (_) {}
+
+    return fallback;
   }
 
   // ============================
@@ -73,6 +93,7 @@ class MatchesService {
   Future<String?> createMatch({
     required String seasonId,
     String? categoryId,
+    required String journal,
     required String homeTeamId,
     required String awayTeamId,
     required String venueId,
@@ -85,16 +106,19 @@ class MatchesService {
       body: jsonEncode({
         "season_id": seasonId,
         "category_id": categoryId,
+        "journal": journal,
         "home_team_id": homeTeamId,
         "away_team_id": awayTeamId,
         "venue_id": venueId,
-        "match_date": matchDate.toIso8601String(),
+        "match_date": EcuadorTime.ecuadorLocalToUtcIso(matchDate),
         "observations": observations,
       }),
     );
 
     if (res.statusCode != 200 && res.statusCode != 201) {
-      throw Exception("Error creando partido");
+      throw Exception(
+        _extractErrorMessage(res, "Error creando partido"),
+      );
     }
 
     try {
@@ -133,7 +157,10 @@ class MatchesService {
 
     if (res.statusCode != 200 && res.statusCode != 201) {
       throw Exception(
-        "Error asignando arbitro al partido (${res.statusCode})",
+        _extractErrorMessage(
+          res,
+          "Error asignando arbitro al partido (${res.statusCode})",
+        ),
       );
     }
   }
@@ -162,7 +189,9 @@ class MatchesService {
     );
 
     if (res.statusCode != 200) {
-      throw Exception("Error al iniciar el partido");
+      throw Exception(
+        _extractErrorMessage(res, "Error al iniciar el partido"),
+      );
     }
   }
 
@@ -187,7 +216,9 @@ class MatchesService {
     );
 
     if (res.statusCode != 200) {
-      throw Exception("Error finalizando el partido");
+      throw Exception(
+        _extractErrorMessage(res, "Error finalizando el partido"),
+      );
     }
   }
 
@@ -208,7 +239,9 @@ class MatchesService {
     );
 
     if (res.statusCode != 200) {
-      throw Exception("Error cancelando el partido");
+      throw Exception(
+        _extractErrorMessage(res, "Error cancelando el partido"),
+      );
     }
   }
 

@@ -21,6 +21,18 @@ class TeamPlayer {
 
   factory TeamPlayer.fromJson(Map<String, dynamic> json) {
     final playerJson = json['players'] ?? json['player'];
+    DateTime parseDateOnly(dynamic raw) {
+      final text = raw?.toString() ?? '';
+      final core = text.length >= 10 ? text.substring(0, 10) : text;
+      final parts = core.split('-');
+      if (parts.length == 3) {
+        final year = int.tryParse(parts[0]) ?? 1970;
+        final month = int.tryParse(parts[1]) ?? 1;
+        final day = int.tryParse(parts[2]) ?? 1;
+        return DateTime(year, month, day);
+      }
+      return DateTime.parse(text);
+    }
 
     return TeamPlayer(
       id: (json['id'] ?? json['_id']).toString(),
@@ -35,9 +47,9 @@ class TeamPlayer {
           ) ??
           0,
       position: (json['position'] ?? '').toString(),
-      joinedAt: DateTime.parse(json['joined_at']),
+      joinedAt: parseDateOnly(json['joined_at']),
       leftAt: json['left_at'] != null
-          ? DateTime.parse(json['left_at'])
+          ? parseDateOnly(json['left_at'])
           : null,
       player: Player.fromJson(
         playerJson is Map<String, dynamic>
