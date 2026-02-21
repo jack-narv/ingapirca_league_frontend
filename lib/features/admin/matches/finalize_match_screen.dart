@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../models/match.dart';
 import '../../../models/match_lineup.dart';
+import '../../../models/referees.dart';
 import '../../../services/match_lineups_service.dart';
+import '../../../services/match_referee_observations_service.dart';
 import '../../../services/matches_service.dart';
+import '../../../services/referee_ratings_service.dart';
+import '../../../services/referees_service.dart';
 
 class FinalizeMatchScreen extends StatefulWidget {
   final Match match;
@@ -27,6 +31,12 @@ class _FinalizeMatchScreenState
   final MatchesService _matchesService = MatchesService();
   final MatchLineupsService _lineupsService =
       MatchLineupsService();
+  final RefereesService _refereesService = RefereesService();
+  final RefereeRatingsService _refereeRatingsService =
+      RefereeRatingsService();
+  final MatchRefereeObservationsService
+      _matchRefereeObservationsService =
+      MatchRefereeObservationsService();
 
   late final TextEditingController _homeScoreController;
   late final TextEditingController _awayScoreController;
@@ -36,12 +46,19 @@ class _FinalizeMatchScreenState
 
   List<MatchLineupPlayer> _homeLineup = [];
   List<MatchLineupPlayer> _awayLineup = [];
+  List<MatchRefereeAssignment> _matchReferees = [];
 
   String? _homeSubmittedBy;
   String? _awaySubmittedBy;
 
+  final Map<String, int> _ratingsByKey = {};
+  final Map<String, TextEditingController> _ratingCommentsByKey = {};
+  final Map<String, TextEditingController>
+      _refereeObservationsByRefereeId = {};
+
   bool _loading = false;
   bool _lineupsLoading = true;
+  bool _refereesLoading = true;
 
   @override
   void initState() {
@@ -58,6 +75,7 @@ class _FinalizeMatchScreenState
     _homeObservationController = TextEditingController();
     _awayObservationController = TextEditingController();
     _loadLineups();
+    _loadReferees();
   }
 
   @override
@@ -67,6 +85,13 @@ class _FinalizeMatchScreenState
     _adminObservationController.dispose();
     _homeObservationController.dispose();
     _awayObservationController.dispose();
+    for (final controller in _ratingCommentsByKey.values) {
+      controller.dispose();
+    }
+    for (final controller
+        in _refereeObservationsByRefereeId.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -98,6 +123,49 @@ class _FinalizeMatchScreenState
     } finally {
       if (mounted) setState(() => _lineupsLoading = false);
     }
+  }
+
+  Future<void> _loadReferees() async {
+    setState(() => _refereesLoading = true);
+    try {
+      final assignments =
+          await _refereesService.getByMatch(widget.match.id);
+      if (!mounted) return;
+      setState(() {
+        _matchReferees = assignments;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No se pudieron cargar los arbitros del partido.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _refereesLoading = false);
+    }
+  }
+
+  String _ratingKey(String teamId, String refereeId) {
+    return '$teamId::$refereeId';
+  }
+
+  TextEditingController _commentControllerFor(String key) {
+    return _ratingCommentsByKey.putIfAbsent(
+      key,
+      () => TextEditingController(),
+    );
+  }
+
+  TextEditingController _refereeObservationControllerFor(
+    String refereeId,
+  ) {
+    return _refereeObservationsByRefereeId.putIfAbsent(
+      refereeId,
+      () => TextEditingController(),
+    );
   }
 
   Future<void> _finalize() async {
@@ -151,6 +219,31 @@ class _FinalizeMatchScreenState
       return;
     }
 
+    if (_matchReferees.isNotEmpty) {
+      for (final assignment in _matchReferees) {
+        final homeKey = _ratingKey(
+          widget.match.homeTeamId,
+          assignment.refereeId,
+        );
+        final awayKey = _ratingKey(
+          widget.match.awayTeamId,
+          assignment.refereeId,
+        );
+
+        if (_ratingsByKey[homeKey] == null ||
+            _ratingsByKey[awayKey] == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Cada equipo debe calificar a todos los arbitros (1 a 10).',
+              ),
+            ),
+          );
+          return;
+        }
+      }
+    }
+
     setState(() => _loading = true);
     try {
       await _matchesService.finishMatch(
@@ -176,6 +269,49 @@ class _FinalizeMatchScreenState
           submittedBy: _awaySubmittedBy!,
           observation: awayObservation,
         );
+      }
+
+      for (final assignment in _matchReferees) {
+        final homeKey = _ratingKey(
+          widget.match.homeTeamId,
+          assignment.refereeId,
+        );
+        final awayKey = _ratingKey(
+          widget.match.awayTeamId,
+          assignment.refereeId,
+        );
+
+        await _refereeRatingsService.create(
+          matchId: widget.match.id,
+          refereeId: assignment.refereeId,
+          teamId: widget.match.homeTeamId,
+          rating: _ratingsByKey[homeKey]!,
+          comment: _commentControllerFor(homeKey).text.trim().isEmpty
+              ? null
+              : _commentControllerFor(homeKey).text.trim(),
+        );
+
+        await _refereeRatingsService.create(
+          matchId: widget.match.id,
+          refereeId: assignment.refereeId,
+          teamId: widget.match.awayTeamId,
+          rating: _ratingsByKey[awayKey]!,
+          comment: _commentControllerFor(awayKey).text.trim().isEmpty
+              ? null
+              : _commentControllerFor(awayKey).text.trim(),
+        );
+
+        final refereeObservation = _refereeObservationControllerFor(
+          assignment.refereeId,
+        ).text.trim();
+        if (refereeObservation.isNotEmpty) {
+          await _matchRefereeObservationsService.submitObservation(
+            matchId: widget.match.id,
+            refereeId: assignment.refereeId,
+            observation: refereeObservation,
+            status: 'SUBMITTED',
+          );
+        }
       }
 
       if (!mounted) return;
@@ -209,6 +345,18 @@ class _FinalizeMatchScreenState
           _buildScoreSection(),
           const SizedBox(height: 12),
           _buildAdminObservationSection(),
+          const SizedBox(height: 12),
+          _buildRefereeRatingsSection(
+            teamName: widget.homeTeamName,
+            teamId: widget.match.homeTeamId,
+          ),
+          const SizedBox(height: 12),
+          _buildRefereeRatingsSection(
+            teamName: widget.awayTeamName,
+            teamId: widget.match.awayTeamId,
+          ),
+          const SizedBox(height: 12),
+          _buildRefereeObservationsSection(),
           const SizedBox(height: 12),
           _buildTeamObservationSection(
             title: widget.homeTeamName,
@@ -341,6 +489,188 @@ class _FinalizeMatchScreenState
     );
   }
 
+  Widget _buildRefereeRatingsSection({
+    required String teamName,
+    required String teamId,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: const Color(0xFF1A2332),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Calificacion arbitros - $teamName',
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Obligatorio (1 a 10) por cada arbitro',
+            style: TextStyle(color: Colors.white60),
+          ),
+          const SizedBox(height: 10),
+          if (_refereesLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_matchReferees.isEmpty)
+            const Text(
+              'Sin arbitros asignados en este partido.',
+              style: TextStyle(color: Colors.white70),
+            )
+          else
+            Column(
+              children: _matchReferees.map((assignment) {
+                final key = _ratingKey(teamId, assignment.refereeId);
+                final refereeName =
+                    assignment.referee?.fullName.trim().isNotEmpty == true
+                        ? assignment.referee!.fullName
+                        : assignment.refereeId;
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F172A),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${_roleLabel(assignment.role)}: $refereeName',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<int>(
+                        initialValue: _ratingsByKey[key],
+                        items: List.generate(
+                          10,
+                          (index) {
+                            final score = index + 1;
+                            return DropdownMenuItem<int>(
+                              value: score,
+                              child: Text('$score'),
+                            );
+                          },
+                        ),
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setState(() {
+                            _ratingsByKey[key] = value;
+                          });
+                        },
+                        decoration: const InputDecoration(
+                          labelText: 'Calificacion',
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _commentControllerFor(key),
+                        minLines: 1,
+                        maxLines: 3,
+                        decoration: const InputDecoration(
+                          hintText: 'Comentario (opcional)',
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRefereeObservationsSection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: const Color(0xFF1A2332),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Observaciones de arbitros',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Opcional',
+            style: TextStyle(color: Colors.white60),
+          ),
+          const SizedBox(height: 10),
+          if (_refereesLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_matchReferees.isEmpty)
+            const Text(
+              'Sin arbitros asignados en este partido.',
+              style: TextStyle(color: Colors.white70),
+            )
+          else
+            Column(
+              children: _matchReferees.map((assignment) {
+                final refereeName =
+                    assignment.referee?.fullName.trim().isNotEmpty == true
+                        ? assignment.referee!.fullName
+                        : assignment.refereeId;
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F172A),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${_roleLabel(assignment.role)}: $refereeName',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _refereeObservationControllerFor(
+                          assignment.refereeId,
+                        ),
+                        minLines: 1,
+                        maxLines: 3,
+                        decoration: const InputDecoration(
+                          hintText:
+                              'Escribe la observacion del arbitro (opcional)',
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTeamObservationSection({
     required String title,
     required List<MatchLineupPlayer> players,
@@ -406,5 +736,20 @@ class _FinalizeMatchScreenState
         ],
       ),
     );
+  }
+
+  String _roleLabel(String role) {
+    switch (role.toUpperCase()) {
+      case 'MAIN':
+        return 'Principal';
+      case 'ASSISTANT_1':
+        return 'Asistente 1';
+      case 'ASSISTANT_2':
+        return 'Asistente 2';
+      case 'FOURTH':
+        return 'Cuarto';
+      default:
+        return role;
+    }
   }
 }

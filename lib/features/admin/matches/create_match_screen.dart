@@ -154,19 +154,20 @@ class _CreateMatchScreenState
     setState(() => _loading = true);
 
     try {
-      final assignments =
-          _buildRefereeAssignments();
-      if (assignments.isEmpty) {
+      if (_mainReferee == null) {
         ScaffoldMessenger.of(context)
             .showSnackBar(
           const SnackBar(
             content: Text(
-                "Debes seleccionar al menos un arbitro"),
+                "Debes seleccionar un arbitro principal (MAIN)"),
           ),
         );
         setState(() => _loading = false);
         return;
       }
+
+      final assignments =
+          _buildRefereeAssignments();
 
       final matchId =
           await _matchesService.createMatch(
@@ -481,7 +482,7 @@ class _CreateMatchScreenState
                     _buildDropdownCard<
                         Referee?>(
                       label:
-                          "Arbitro Principal (MAIN)",
+                          "Arbitro Principal (MAIN) *",
                       value: _mainReferee,
                       items: [
                         null,

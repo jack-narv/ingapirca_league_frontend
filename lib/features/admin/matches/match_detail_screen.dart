@@ -5,13 +5,17 @@ import '../../../models/match.dart';
 import '../../../models/match_event.dart';
 import '../../../models/match_lineup.dart';
 import '../../../models/match_observations.dart';
+import '../../../models/match_referee_observation.dart';
+import '../../../models/referee_ratings.dart';
 import '../../../models/referees.dart';
 import '../../../models/team.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/live_match_service.dart';
 import '../../../services/match_events_service.dart';
 import '../../../services/match_lineups_service.dart';
+import '../../../services/match_referee_observations_service.dart';
 import '../../../services/matches_service.dart';
+import '../../../services/referee_ratings_service.dart';
 import '../../../services/referees_service.dart';
 import '../../../services/teams_service.dart';
 import 'finalize_match_screen.dart';
@@ -36,6 +40,11 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
   final MatchEventsService _eventsService = MatchEventsService();
   final MatchLineupsService _lineupsService = MatchLineupsService();
   final RefereesService _refereesService = RefereesService();
+  final RefereeRatingsService _refereeRatingsService =
+      RefereeRatingsService();
+  final MatchRefereeObservationsService
+      _matchRefereeObservationsService =
+      MatchRefereeObservationsService();
   final LiveMatchSocketService _socketService =
       LiveMatchSocketService(authService: AuthService());
 
@@ -52,6 +61,8 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
   final Map<String, String> _teamIdByPlayerId = {};
   final List<MatchObservation> _teamObservations = [];
   final List<MatchRefereeAssignment> _matchReferees = [];
+  final List<RefereeRating> _refereeRatings = [];
+  final List<MatchRefereeObservation> _refereeObservations = [];
 
   StreamSubscription? _scoreSub;
   StreamSubscription? _eventSub;
@@ -62,6 +73,8 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
   bool _eventsLoading = true;
   bool _observationsLoading = true;
   bool _refereesLoading = true;
+  bool _refereeRatingsLoading = true;
+  bool _refereeObservationsLoading = true;
 
   @override
   void initState() {
@@ -96,6 +109,8 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
     await _loadEvents();
     await _loadLineupCaches();
     await _loadMatchReferees();
+    await _loadRefereeRatings();
+    await _loadRefereeObservations();
     await _loadTeamObservations();
   }
 
@@ -292,6 +307,52 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
     }
   }
 
+  Future<void> _loadRefereeRatings() async {
+    setState(() => _refereeRatingsLoading = true);
+    try {
+      final ratings =
+          await _refereeRatingsService.getByMatch(_match.id);
+      if (!mounted) return;
+      setState(() {
+        _refereeRatings
+          ..clear()
+          ..addAll(ratings);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _refereeRatings.clear();
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _refereeRatingsLoading = false);
+      }
+    }
+  }
+
+  Future<void> _loadRefereeObservations() async {
+    setState(() => _refereeObservationsLoading = true);
+    try {
+      final observations =
+          await _matchRefereeObservationsService.getByMatch(_match.id);
+      if (!mounted) return;
+      setState(() {
+        _refereeObservations
+          ..clear()
+          ..addAll(observations);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _refereeObservations.clear();
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _refereeObservationsLoading = false);
+      }
+    }
+  }
+
   Map<String, dynamic> _eventToMap(MatchEvent e) {
     return {
       'id': e.id,
@@ -374,8 +435,6 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
             children: [
               _buildScoreboard(),
               const SizedBox(height: 16),
-              _buildRefereesSummary(),
-              const SizedBox(height: 12),
               _buildAdminActions(),
               const SizedBox(height: 12),
               Container(
@@ -709,6 +768,8 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
+          _buildRefereesSummary(),
+          const SizedBox(height: 14),
           _buildLineupSection(
             title: _teamName(_match.homeTeamId),
             teamId: _match.homeTeamId,
@@ -968,6 +1029,225 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
               ],
             ),
           ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              color: const Color(0xFF1A2332),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Calificaciones a arbitros',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                if (_refereeRatingsLoading)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                  )
+                else if (_refereeRatings.isEmpty)
+                  const Text(
+                    'Sin calificaciones de arbitros registradas.',
+                    style: TextStyle(color: Colors.white70),
+                  )
+                else
+                  Column(
+                    children: _refereeRatings.map((r) {
+                      final role = _matchReferees
+                          .where((a) => a.refereeId == r.refereeId)
+                          .map((a) => _roleLabel(a.role))
+                          .cast<String?>()
+                          .firstWhere(
+                            (value) => value != null,
+                            orElse: () => null,
+                          );
+
+                      final submittedAt = r.submittedAt?.toLocal();
+                      final dateText = submittedAt == null
+                          ? ''
+                          : '${submittedAt.day.toString().padLeft(2, '0')}/'
+                              '${submittedAt.month.toString().padLeft(2, '0')}/'
+                              '${submittedAt.year} '
+                              '${submittedAt.hour.toString().padLeft(2, '0')}:'
+                              '${submittedAt.minute.toString().padLeft(2, '0')}';
+
+                      final refereeLabel =
+                          r.refereeName?.trim().isNotEmpty == true
+                              ? r.refereeName!
+                              : r.refereeId;
+
+                      final teamLabel = r.teamName?.trim().isNotEmpty == true
+                          ? r.teamName!
+                          : _teamName(r.teamId);
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              role == null
+                                  ? refereeLabel
+                                  : '$refereeLabel ($role)',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Equipo: $teamLabel',
+                              style: const TextStyle(
+                                color: Colors.white70,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            _buildTenStarRating(r.rating),
+                            const SizedBox(height: 4),
+                            Text(
+                              r.comment?.trim().isNotEmpty == true
+                                  ? r.comment!
+                                  : 'Sin comentario',
+                              style: const TextStyle(
+                                color: Colors.white60,
+                              ),
+                            ),
+                            if (dateText.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                dateText,
+                                style: const TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              color: const Color(0xFF1A2332),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Observaciones de arbitros',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                if (_refereeObservationsLoading)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                  )
+                else if (_refereeObservations.isEmpty)
+                  const Text(
+                    'Sin observaciones de arbitros registradas.',
+                    style: TextStyle(color: Colors.white70),
+                  )
+                else
+                  Column(
+                    children: _refereeObservations.map((o) {
+                      final submittedAt = o.submittedAt?.toLocal();
+                      final dateText = submittedAt == null
+                          ? ''
+                          : '${submittedAt.day.toString().padLeft(2, '0')}/'
+                              '${submittedAt.month.toString().padLeft(2, '0')}/'
+                              '${submittedAt.year} '
+                              '${submittedAt.hour.toString().padLeft(2, '0')}:'
+                              '${submittedAt.minute.toString().padLeft(2, '0')}';
+
+                      final role = _matchReferees
+                          .where((a) => a.refereeId == o.refereeId)
+                          .map((a) => _roleLabel(a.role))
+                          .cast<String?>()
+                          .firstWhere(
+                            (value) => value != null,
+                            orElse: () => null,
+                          );
+
+                      final refereeLabel =
+                          o.refereeName?.trim().isNotEmpty == true
+                              ? o.refereeName!
+                              : o.refereeId;
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              role == null
+                                  ? refereeLabel
+                                  : '$refereeLabel ($role)',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              o.observation,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Estado: ${o.status}',
+                              style: const TextStyle(
+                                color: Colors.white54,
+                                fontSize: 12,
+                              ),
+                            ),
+                            if (dateText.isNotEmpty)
+                              Text(
+                                dateText,
+                                style: const TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 12,
+                                ),
+                              ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -1083,5 +1363,22 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
       default:
         return Colors.blueGrey;
     }
+  }
+
+  Widget _buildTenStarRating(int rating) {
+    final safeRating = rating.clamp(0, 10);
+
+    return Wrap(
+      spacing: 2,
+      runSpacing: 2,
+      children: List.generate(10, (index) {
+        final filled = index < safeRating;
+        return Icon(
+          filled ? Icons.star : Icons.star_border,
+          size: 16,
+          color: filled ? Colors.amber : Colors.white24,
+        );
+      }),
+    );
   }
 }
