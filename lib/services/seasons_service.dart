@@ -23,7 +23,7 @@ class SeasonsService {
     }
   }
 
-  Future<void> createSeason({
+  Future<Season> createSeason({
     required String leagueId,
     required String name,
     required DateTime startDate,
@@ -45,9 +45,13 @@ class SeasonsService {
       }),
     );
 
-    if(response.statusCode != 201){
+    if(response.statusCode != 201 &&
+        response.statusCode != 200){
       throw Exception("No se pudo crear la temporada");
     }
+
+    final data = jsonDecode(response.body);
+    return Season.fromJson(data);
   }
 
   Future<List<SeasonCategory>> getCategoriesBySeason(
@@ -74,12 +78,13 @@ class SeasonsService {
     final token = await _storage.read(key: "jwt");
 
     final response = await http.post(
-      Uri.parse("$baseUrl/seasons/$seasonId/categories"),
+      Uri.parse("$baseUrl/season-categories"),
       headers: {
         "Content-Type": "application/json",
         "Authorization": "Bearer $token",
       },
       body: jsonEncode({
+        "season_id": seasonId,
         "name": name,
         "sort_order": sortOrder,
       }),

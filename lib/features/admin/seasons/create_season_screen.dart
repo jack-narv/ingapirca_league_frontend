@@ -2,8 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../core/widgets/primary_gradient_button.dart';
+import '../../../services/auth_service.dart';
 import '../../../services/seasons_service.dart';
 import '../../home/home_screen.dart';
+
+class _CategoryDraft {
+  final TextEditingController nameController;
+
+  _CategoryDraft()
+      : nameController = TextEditingController();
+
+  void dispose() {
+    nameController.dispose();
+  }
+}
 
 class CreateSeasonScreen extends StatefulWidget {
   final String leagueId;
@@ -20,11 +32,43 @@ class CreateSeasonScreen extends StatefulWidget {
 class _CreateSeasonScreenState extends State<CreateSeasonScreen> {
   final _nameController = TextEditingController();
   final SeasonsService _service = SeasonsService();
+  final AuthService _authService = AuthService();
   final _formatter = DateFormat("yyyy/MM/dd");
 
   DateTime? _startDate;
   DateTime? _endDate;
+  bool _isAdmin = false;
+  bool _checkingRole = true;
   bool _loading = false;
+  final List<_CategoryDraft> _categoryDrafts = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRole();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    for (final draft in _categoryDrafts) {
+      draft.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _loadRole() async {
+    final isAdmin = await _authService.isAdmin();
+    if (!mounted) return;
+
+    setState(() {
+      _isAdmin = isAdmin;
+      _checkingRole = false;
+      if (_isAdmin && _categoryDrafts.isEmpty) {
+        _categoryDrafts.add(_CategoryDraft());
+      }
+    });
+  }
 
   void _handleBottomNavTap(int index) {
     if (index == 0) {
@@ -72,24 +116,75 @@ class _CreateSeasonScreenState extends State<CreateSeasonScreen> {
       return;
     }
 
+    if (_endDate!.isBefore(_startDate!)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("La fecha fin debe ser posterior al inicio")),
+      );
+      return;
+    }
+
+    final categoryNames = _categoryDrafts
+        .map((d) => d.nameController.text.trim())
+        .where((name) => name.isNotEmpty)
+        .toList();
+
+    if (categoryNames.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Debes agregar al menos 1 categoria"),
+        ),
+      );
+      return;
+    }
+
     setState(() => _loading = true);
 
     try {
-      await _service.createSeason(
+      final season = await _service.createSeason(
         leagueId: widget.leagueId,
         name: _nameController.text.trim(),
         startDate: _startDate!,
         endDate: _endDate!,
       );
 
+      if (_isAdmin && categoryNames.isNotEmpty) {
+        await Future.wait(
+          List.generate(
+            categoryNames.length,
+            (index) => _service.createCategory(
+              seasonId: season.id,
+              name: categoryNames[index],
+              sortOrder: index + 1,
+            ),
+          ),
+        );
+      }
+
+      if (!mounted) return;
       Navigator.pop(context);
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Error creando temporada")),
       );
     } finally {
-      setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
+  }
+
+  void _addCategory() {
+    setState(() {
+      _categoryDrafts.add(_CategoryDraft());
+    });
+  }
+
+  void _removeCategory(int index) {
+    setState(() {
+      final removed = _categoryDrafts.removeAt(index);
+      removed.dispose();
+    });
   }
 
   Widget _buildInput() {
@@ -189,6 +284,69 @@ class _CreateSeasonScreenState extends State<CreateSeasonScreen> {
               date: _endDate,
               onTap: () => _pickDate(isStart: false),
             ),
+            if (_checkingRole)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 18),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+            if (!_checkingRole && _isAdmin) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      "Categorias de temporada",
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: _addCategory,
+                    icon: const Icon(Icons.add),
+                    label: const Text("Agregar"),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (_categoryDrafts.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 18),
+                  child: Text(
+                    "No hay categorias agregadas.",
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                ),
+              ...List.generate(_categoryDrafts.length, (index) {
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 14),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.45),
+                        blurRadius: 14,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: TextField(
+                    controller: _categoryDrafts[index].nameController,
+                    decoration: InputDecoration(
+                      labelText: "Categoria ${index + 1}",
+                      prefixIcon: const Icon(Icons.category),
+                      suffixIcon: _categoryDrafts.length > 1
+                          ? IconButton(
+                              icon: const Icon(Icons.delete_outline),
+                              onPressed: () => _removeCategory(index),
+                            )
+                          : null,
+                    ),
+                  ),
+                );
+              }),
+            ],
             const SizedBox(height: 20),
             PrimaryGradientButton(
               text: "Crear Temporada",
