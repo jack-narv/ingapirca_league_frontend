@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/widgets/app_scaffold_with_nav.dart';
 import '../../models/season.dart';
+import '../admin/referees/referees_list_screen.dart';
 import '../admin/standings/standings_screen.dart';
 import '../admin/teams/teams_list_screen.dart';
 import 'home_screen.dart';
@@ -102,6 +103,21 @@ class HomeScreenSeason extends StatelessWidget {
                         context,
                         MaterialPageRoute(
                           builder: (_) => StandingsScreen(
+                            seasonId: season.id,
+                            seasonName: season.name,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  _DashboardCard(
+                    title: "Arbitros",
+                    icon: Icons.sports,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => RefereesListScreen(
                             seasonId: season.id,
                             seasonName: season.name,
                           ),

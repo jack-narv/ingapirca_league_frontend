@@ -5,12 +5,14 @@ import '../../../models/match.dart';
 import '../../../models/match_event.dart';
 import '../../../models/match_lineup.dart';
 import '../../../models/match_observations.dart';
+import '../../../models/referees.dart';
 import '../../../models/team.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/live_match_service.dart';
 import '../../../services/match_events_service.dart';
 import '../../../services/match_lineups_service.dart';
 import '../../../services/matches_service.dart';
+import '../../../services/referees_service.dart';
 import '../../../services/teams_service.dart';
 import 'finalize_match_screen.dart';
 import 'match_lineup_screen.dart';
@@ -33,6 +35,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
   final TeamsService _teamsService = TeamsService();
   final MatchEventsService _eventsService = MatchEventsService();
   final MatchLineupsService _lineupsService = MatchLineupsService();
+  final RefereesService _refereesService = RefereesService();
   final LiveMatchSocketService _socketService =
       LiveMatchSocketService(authService: AuthService());
 
@@ -48,6 +51,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
   final Map<String, int> _shirtByPlayerId = {};
   final Map<String, String> _teamIdByPlayerId = {};
   final List<MatchObservation> _teamObservations = [];
+  final List<MatchRefereeAssignment> _matchReferees = [];
 
   StreamSubscription? _scoreSub;
   StreamSubscription? _eventSub;
@@ -57,6 +61,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
   bool _loading = false;
   bool _eventsLoading = true;
   bool _observationsLoading = true;
+  bool _refereesLoading = true;
 
   @override
   void initState() {
@@ -90,6 +95,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
     await _loadTeams();
     await _loadEvents();
     await _loadLineupCaches();
+    await _loadMatchReferees();
     await _loadTeamObservations();
   }
 
@@ -263,6 +269,29 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
     }
   }
 
+  Future<void> _loadMatchReferees() async {
+    setState(() => _refereesLoading = true);
+    try {
+      final assignments =
+          await _refereesService.getByMatch(_match.id);
+      if (!mounted) return;
+      setState(() {
+        _matchReferees
+          ..clear()
+          ..addAll(assignments);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _matchReferees.clear();
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _refereesLoading = false);
+      }
+    }
+  }
+
   Map<String, dynamic> _eventToMap(MatchEvent e) {
     return {
       'id': e.id,
@@ -345,6 +374,8 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
             children: [
               _buildScoreboard(),
               const SizedBox(height: 16),
+              _buildRefereesSummary(),
+              const SizedBox(height: 12),
               _buildAdminActions(),
               const SizedBox(height: 12),
               Container(
@@ -487,6 +518,92 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
         );
       },
     );
+  }
+
+  Widget _buildRefereesSummary() {
+    if (_refereesLoading) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A2332),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Text(
+          'Cargando arbitros...',
+          style: TextStyle(color: Colors.white70, fontSize: 12),
+        ),
+      );
+    }
+
+    if (_matchReferees.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A2332),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Text(
+          'Arbitros: sin asignacion',
+          style: TextStyle(color: Colors.white70, fontSize: 12),
+        ),
+      );
+    }
+
+    final assignments = [..._matchReferees]
+      ..sort((a, b) => a.role.compareTo(b.role));
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A2332),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: assignments.map((a) {
+          final refereeName =
+              a.referee?.fullName.trim().isNotEmpty == true
+                  ? a.referee!.fullName
+                  : a.refereeId;
+          return Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: 6,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white10,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Text(
+              '${_roleLabel(a.role)}: $refereeName',
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.white70,
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  String _roleLabel(String role) {
+    switch (role.toUpperCase()) {
+      case 'MAIN':
+        return 'Principal';
+      case 'ASSISTANT_1':
+        return 'Asistente 1';
+      case 'ASSISTANT_2':
+        return 'Asistente 2';
+      case 'FOURTH':
+        return 'Cuarto';
+      default:
+        return role;
+    }
   }
 
   Widget _buildEventsTab() {

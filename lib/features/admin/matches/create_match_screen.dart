@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../core/widgets/primary_gradient_button.dart';
+import '../../../models/referees.dart';
 import '../../../models/season_category.dart';
 import '../../../models/team.dart';
 import '../../../models/venue.dart';
+import '../../../services/referees_service.dart';
 import '../../../services/seasons_service.dart';
 import '../../../services/teams_service.dart';
 import '../../../services/venues_service.dart';
@@ -33,15 +35,22 @@ class _CreateMatchScreenState
       SeasonsService();
   final VenuesService _venuesService =
       VenuesService();
+  final RefereesService _refereesService =
+      RefereesService();
 
   List<SeasonCategory> _categories = [];
   SeasonCategory? _selectedCategory;
   late Future<List<Team>> _teamsFuture;
   late Future<List<Venue>> _venuesFuture;
+  late Future<List<Referee>> _refereesFuture;
 
   Team? _homeTeam;
   Team? _awayTeam;
   Venue? _venue;
+  Referee? _mainReferee;
+  Referee? _assistant1Referee;
+  Referee? _assistant2Referee;
+  Referee? _fourthReferee;
   DateTime? _matchDate;
   final _observationsController =
       TextEditingController();
@@ -57,7 +66,16 @@ class _CreateMatchScreenState
     _teamsFuture = Future.value([]);
     _venuesFuture =
         _venuesService.getAll();
+    _refereesFuture =
+        _loadActiveReferees();
     _loadCategories();
+  }
+
+  Future<List<Referee>> _loadActiveReferees() async {
+    final all = await _refereesService.getBySeason(
+      widget.seasonId,
+    );
+    return all.where((r) => r.isActive).toList();
   }
 
   Future<void> _loadCategories() async {
@@ -136,7 +154,22 @@ class _CreateMatchScreenState
     setState(() => _loading = true);
 
     try {
-      await _matchesService.createMatch(
+      final assignments =
+          _buildRefereeAssignments();
+      if (assignments.isEmpty) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(
+          const SnackBar(
+            content: Text(
+                "Debes seleccionar al menos un arbitro"),
+          ),
+        );
+        setState(() => _loading = false);
+        return;
+      }
+
+      final matchId =
+          await _matchesService.createMatch(
         seasonId: widget.seasonId,
         categoryId: _selectedCategory!.id,
         homeTeamId: _homeTeam!.id,
@@ -147,20 +180,102 @@ class _CreateMatchScreenState
             _observationsController.text.trim(),
       );
 
+      if (matchId == null || matchId.isEmpty) {
+        throw Exception(
+          "No se pudo obtener el id del partido",
+        );
+      }
       if (!mounted) return;
-      Navigator.pop(context);
-    } catch (_) {
+
+      try {
+        await _matchesService.addRefereesToMatch(
+          matchId: matchId,
+          assignments: assignments,
+        );
+
+        if (!mounted) return;
+        Navigator.pop(context);
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context)
+            .showSnackBar(
+          SnackBar(
+            content: Text(
+              "Partido creado, pero no se pudieron asignar arbitros: $e",
+            ),
+          ),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(
-        const SnackBar(
-          content:
-              Text("Error creando partido"),
+        SnackBar(
+          content: Text(
+            "Error creando partido: $e",
+          ),
         ),
       );
     } finally {
       setState(() => _loading = false);
     }
   }
+
+  List<MatchRefereeAssignmentInput>
+      _buildRefereeAssignments() {
+    final Map<String, String> selectedByRole = {
+      "MAIN": _mainReferee?.id ?? "",
+      "ASSISTANT_1":
+          _assistant1Referee?.id ?? "",
+      "ASSISTANT_2":
+          _assistant2Referee?.id ?? "",
+      "FOURTH": _fourthReferee?.id ?? "",
+    };
+
+    final selectedIds = selectedByRole.values
+        .where((id) => id.isNotEmpty)
+        .toList();
+    final hasDuplicates = selectedIds.length !=
+        selectedIds.toSet().length;
+
+    if (hasDuplicates) {
+      throw Exception(
+        "Un arbitro no puede repetirse en multiples roles",
+      );
+    }
+
+    return selectedByRole.entries
+        .where((entry) =>
+            entry.value.isNotEmpty)
+        .map(
+          (entry) =>
+              MatchRefereeAssignmentInput(
+            refereeId: entry.value,
+            role: entry.key,
+          ),
+        )
+        .toList();
+  }
+
+  List<Referee> _availableForRole(
+    Referee? currentValue,
+  ) {
+    final selectedIds = [
+      _mainReferee?.id,
+      _assistant1Referee?.id,
+      _assistant2Referee?.id,
+      _fourthReferee?.id,
+    ].whereType<String>().toSet();
+
+    return _activeRefereesCache
+        .where((referee) =>
+            referee.id == currentValue?.id ||
+            !selectedIds.contains(referee.id))
+        .toList();
+  }
+
+  List<Referee> _activeRefereesCache = [];
 
   Widget _buildDropdownCard<T>({
     required String label,
@@ -312,6 +427,142 @@ class _CreateMatchScreenState
                 );
               },
             ),
+            FutureBuilder<List<Referee>>(
+              future: _refereesFuture,
+              builder:
+                  (context, snapshot) {
+                if (snapshot.connectionState ==
+                    ConnectionState.waiting) {
+                  return const Padding(
+                    padding:
+                        EdgeInsets.only(
+                            bottom: 18),
+                    child: Center(
+                      child:
+                          CircularProgressIndicator(),
+                    ),
+                  );
+                }
+
+                if (snapshot.hasError) {
+                  return Padding(
+                    padding:
+                        const EdgeInsets.only(
+                            bottom: 18),
+                    child: Text(
+                      "Error cargando arbitros: ${snapshot.error}",
+                      style: const TextStyle(
+                        color: Colors.white70,
+                      ),
+                    ),
+                  );
+                }
+
+                _activeRefereesCache =
+                    snapshot.data ?? [];
+
+                if (_activeRefereesCache
+                    .isEmpty) {
+                  return const Padding(
+                    padding:
+                        EdgeInsets.only(
+                            bottom: 18),
+                    child: Text(
+                      "No hay arbitros activos para esta temporada",
+                      style: TextStyle(
+                          color:
+                              Colors.white70),
+                    ),
+                  );
+                }
+
+                return Column(
+                  children: [
+                    _buildDropdownCard<
+                        Referee?>(
+                      label:
+                          "Arbitro Principal (MAIN)",
+                      value: _mainReferee,
+                      items: [
+                        null,
+                        ..._availableForRole(
+                            _mainReferee),
+                      ],
+                      getLabel: (r) => r == null
+                          ? "Sin asignar"
+                          : r.fullName,
+                      onChanged: (v) =>
+                          setState(
+                        () => _mainReferee =
+                            v,
+                      ),
+                    ),
+                    _buildDropdownCard<
+                        Referee?>(
+                      label:
+                          "Asistente 1 (ASSISTANT_1)",
+                      value:
+                          _assistant1Referee,
+                      items: [
+                        null,
+                        ..._availableForRole(
+                            _assistant1Referee),
+                      ],
+                      getLabel: (r) => r == null
+                          ? "Sin asignar"
+                          : r.fullName,
+                      onChanged: (v) =>
+                          setState(
+                        () =>
+                            _assistant1Referee =
+                                v,
+                      ),
+                    ),
+                    _buildDropdownCard<
+                        Referee?>(
+                      label:
+                          "Asistente 2 (ASSISTANT_2)",
+                      value:
+                          _assistant2Referee,
+                      items: [
+                        null,
+                        ..._availableForRole(
+                            _assistant2Referee),
+                      ],
+                      getLabel: (r) => r == null
+                          ? "Sin asignar"
+                          : r.fullName,
+                      onChanged: (v) =>
+                          setState(
+                        () =>
+                            _assistant2Referee =
+                                v,
+                      ),
+                    ),
+                    _buildDropdownCard<
+                        Referee?>(
+                      label:
+                          "Cuarto Arbitro (FOURTH)",
+                      value: _fourthReferee,
+                      items: [
+                        null,
+                        ..._availableForRole(
+                            _fourthReferee),
+                      ],
+                      getLabel: (r) => r == null
+                          ? "Sin asignar"
+                          : r.fullName,
+                      onChanged: (v) =>
+                          setState(
+                        () =>
+                            _fourthReferee =
+                                v,
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
 
             GestureDetector(
               onTap: _pickDate,
@@ -375,5 +626,11 @@ class _CreateMatchScreenState
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _observationsController.dispose();
+    super.dispose();
   }
 }
