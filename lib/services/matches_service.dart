@@ -204,6 +204,8 @@ class MatchesService {
     int homeScore,
     int awayScore,
     String? observations,
+    String? bestPlayerId,
+    String? bestGoalkeeperId,
   ) async {
     final res = await http.patch(
       Uri.parse("$baseUrl/matches/$matchId/finish"),
@@ -212,6 +214,8 @@ class MatchesService {
         "home_score": homeScore,
         "away_score": awayScore,
         "observations": observations,
+        "best_player_id": bestPlayerId,
+        "best_goalkeeper_id": bestGoalkeeperId,
       }),
     );
 

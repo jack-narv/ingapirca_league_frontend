@@ -134,6 +134,8 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
           homeScore: _match.homeScore,
           awayScore: _match.awayScore,
           observations: _match.observations,
+          bestPlayerId: _match.bestPlayerId,
+          bestGoalkeeperId: _match.bestGoalkeeperId,
         );
       });
     });
@@ -159,6 +161,8 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
           awayScore:
               awayValue is int ? awayValue : _match.awayScore,
           observations: _match.observations,
+          bestPlayerId: _match.bestPlayerId,
+          bestGoalkeeperId: _match.bestGoalkeeperId,
         );
       });
     });
@@ -196,6 +200,8 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
           awayScore:
               awayValue is int ? awayValue : _match.awayScore,
           observations: _match.observations,
+          bestPlayerId: _match.bestPlayerId,
+          bestGoalkeeperId: _match.bestGoalkeeperId,
         );
       });
     });
@@ -437,6 +443,10 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
           child: Column(
             children: [
               _buildScoreboard(),
+              if (_showAwardsSummary()) ...[
+                const SizedBox(height: 8),
+                _buildAwardsSummary(),
+              ],
               const SizedBox(height: 16),
               _buildAdminActions(),
               const SizedBox(height: 12),
@@ -632,6 +642,90 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
         );
       },
     );
+  }
+
+  bool _showAwardsSummary() {
+    final hasBestPlayer =
+        (_match.bestPlayerId ?? '').trim().isNotEmpty;
+    final hasBestGoalkeeper =
+        (_match.bestGoalkeeperId ?? '').trim().isNotEmpty;
+    return _match.status == 'PLAYED' &&
+        (hasBestPlayer || hasBestGoalkeeper);
+  }
+
+  Widget _buildAwardsSummary() {
+    final bestPlayerId = (_match.bestPlayerId ?? '').trim();
+    final bestGoalkeeperId =
+        (_match.bestGoalkeeperId ?? '').trim();
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          if (bestPlayerId.isNotEmpty)
+            _awardChip(
+              icon: Icons.star_rounded,
+              label: 'MVP',
+              playerId: bestPlayerId,
+            ),
+          if (bestGoalkeeperId.isNotEmpty)
+            _awardChip(
+              icon: Icons.shield_outlined,
+              label: 'Arquero',
+              playerId: bestGoalkeeperId,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _awardChip({
+    required IconData icon,
+    required String label,
+    required String playerId,
+  }) {
+    final playerName = _playerNameOrId(playerId);
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 280),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A2332),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.white12,
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: Colors.amberAccent),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              '$label: $playerName',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.white70,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _playerNameOrId(String playerId) {
+    final fromCache = _playerNamesById[playerId];
+    if (fromCache != null && fromCache.trim().isNotEmpty) {
+      return fromCache;
+    }
+    return playerId;
   }
 
   Widget _buildRefereesSummary() {

@@ -35,8 +35,12 @@ class _MatchesListScreenState
     late Future<List<Team>> _teamsFuture;
     late Future<List<SeasonCategory>>
         _categoriesFuture;
-    SeasonCategory? _selectedCategory;
+    String? _selectedCategoryId;
     String? _selectedJournal;
+    bool _didAutoSelectJournal = false;
+    final ScrollController _scrollController = ScrollController(
+      keepScrollOffset: false,
+    );
     Map<String, Team> _teamsById = {};
 
     @override
@@ -53,17 +57,24 @@ class _MatchesListScreenState
       _loadTeams();
     }
 
+    @override
+    void dispose() {
+      _scrollController.dispose();
+      super.dispose();
+    }
+
     void _refresh(){
       setState(() {
         _future = _service.getBySeason(
           widget.seasonId,
-          categoryId: _selectedCategory?.id,
+          categoryId: _selectedCategoryId,
         );
         _teamsFuture = _teamsService.getBySeason(
           widget.seasonId,
-          categoryId: _selectedCategory?.id,
+          categoryId: _selectedCategoryId,
         );
       });
+      _scrollToTop();
       _loadTeams();
     }
 
@@ -77,22 +88,27 @@ class _MatchesListScreenState
       });
     }
 
-    Future<void> _applyCategory(
-      SeasonCategory? category,
-    ) async {
+    Future<void> _applyCategory(String? categoryId) async {
       setState(() {
-        _selectedCategory = category;
+        _selectedCategoryId = categoryId;
         _selectedJournal = null;
+        _didAutoSelectJournal = false;
         _future = _service.getBySeason(
           widget.seasonId,
-          categoryId: category?.id,
+          categoryId: categoryId,
         );
         _teamsFuture = _teamsService.getBySeason(
           widget.seasonId,
-          categoryId: category?.id,
+          categoryId: categoryId,
         );
       });
+      _scrollToTop();
       await _loadTeams();
+    }
+
+    void _scrollToTop() {
+      if (!_scrollController.hasClients) return;
+      _scrollController.jumpTo(0);
     }
 
     @override
@@ -135,12 +151,14 @@ class _MatchesListScreenState
 
             final matches = snapshot.data!;
             final journals = _extractJournals(matches);
+            _tryAutoSelectJournal(matches, journals);
             final filteredMatches = _selectedJournal == null
                 ? matches
                 : matches
                     .where((m) => m.journal == _selectedJournal)
                     .toList();
             return ListView(
+              controller: _scrollController,
               padding: const EdgeInsets.all(20),
               children: [
                 FutureBuilder<List<SeasonCategory>>(
@@ -148,29 +166,36 @@ class _MatchesListScreenState
                   builder: (context, categorySnapshot) {
                     final categories =
                         categorySnapshot.data ?? [];
+                    final validCategoryIds = categories
+                        .map((c) => c.id)
+                        .toSet();
+                    final safeSelectedCategoryId =
+                        validCategoryIds.contains(_selectedCategoryId)
+                            ? _selectedCategoryId
+                            : null;
 
                     return Container(
                       margin: const EdgeInsets.only(
                           bottom: 18),
-                      child: DropdownButtonFormField<
-                          SeasonCategory?>(
-                        value: _selectedCategory,
+                      child: DropdownButtonFormField<String?>(
+                        key: ValueKey(
+                          'match-category-${safeSelectedCategoryId ?? 'all'}',
+                        ),
+                        initialValue: safeSelectedCategoryId,
                         decoration:
                             const InputDecoration(
                           labelText:
                               "Filtrar por categoria",
                         ),
                         items: [
-                          const DropdownMenuItem<
-                              SeasonCategory?>(
+                          const DropdownMenuItem<String?>(
                             value: null,
                             child: Text(
                                 "Todas las categorias"),
                           ),
                           ...categories.map((category) =>
-                              DropdownMenuItem<
-                                  SeasonCategory?>(
-                                value: category,
+                              DropdownMenuItem<String?>(
+                                value: category.id,
                                 child:
                                     Text(category.name),
                               )),
@@ -193,6 +218,7 @@ class _MatchesListScreenState
                             selected: _selectedJournal == null,
                             onSelected: (_) {
                               setState(() => _selectedJournal = null);
+                              _scrollToTop();
                             },
                           ),
                         ),
@@ -208,6 +234,7 @@ class _MatchesListScreenState
                                   _selectedJournal =
                                       selected ? null : journal;
                                 });
+                                _scrollToTop();
                               },
                             ),
                           );
@@ -474,6 +501,92 @@ class _MatchesListScreenState
       });
 
       return journals;
+    }
+
+    void _tryAutoSelectJournal(
+      List<Match> matches,
+      List<String> journals,
+    ) {
+      if (_didAutoSelectJournal || _selectedJournal != null) {
+        return;
+      }
+      if (matches.isEmpty || journals.isEmpty) {
+        _didAutoSelectJournal = true;
+        return;
+      }
+
+      final suggested = _suggestJournalForCurrentWeek(matches, journals);
+      _didAutoSelectJournal = true;
+
+      if (suggested == null || !mounted) return;
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() {
+          _selectedJournal = suggested;
+        });
+      });
+    }
+
+    String? _suggestJournalForCurrentWeek(
+      List<Match> matches,
+      List<String> journals,
+    ) {
+      final now = _ecuadorNow();
+      final today = DateTime(now.year, now.month, now.day);
+      final startOfWeek = today.subtract(
+        Duration(days: today.weekday - DateTime.monday),
+      );
+      final endOfWeekExclusive =
+          startOfWeek.add(const Duration(days: 7));
+
+      final weekMatches = matches.where((match) {
+        final journal = (match.journal ?? '').trim();
+        if (journal.isEmpty || !journals.contains(journal)) {
+          return false;
+        }
+        final date = match.matchDate;
+        return !date.isBefore(startOfWeek) &&
+            date.isBefore(endOfWeekExclusive);
+      }).toList();
+
+      if (weekMatches.isNotEmpty) {
+        weekMatches.sort(
+          (a, b) => a.matchDate
+              .difference(now)
+              .abs()
+              .compareTo(b.matchDate.difference(now).abs()),
+        );
+        return (weekMatches.first.journal ?? '').trim();
+      }
+
+      final upcoming = matches.where((match) {
+        final journal = (match.journal ?? '').trim();
+        return journal.isNotEmpty &&
+            journals.contains(journal) &&
+            !match.matchDate.isBefore(now);
+      }).toList()
+        ..sort((a, b) => a.matchDate.compareTo(b.matchDate));
+
+      if (upcoming.isNotEmpty) {
+        return (upcoming.first.journal ?? '').trim();
+      }
+
+      final latestPast = matches.where((match) {
+        final journal = (match.journal ?? '').trim();
+        return journal.isNotEmpty && journals.contains(journal);
+      }).toList()
+        ..sort((a, b) => b.matchDate.compareTo(a.matchDate));
+
+      if (latestPast.isNotEmpty) {
+        return (latestPast.first.journal ?? '').trim();
+      }
+
+      return null;
+    }
+
+    DateTime _ecuadorNow() {
+      return DateTime.now().toUtc().subtract(const Duration(hours: 5));
     }
 
     Widget _teamInfo({

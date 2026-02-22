@@ -50,6 +50,8 @@ class _FinalizeMatchScreenState
 
   String? _homeSubmittedBy;
   String? _awaySubmittedBy;
+  String? _selectedBestPlayerId;
+  String? _selectedBestGoalkeeperId;
 
   final Map<String, int> _ratingsByKey = {};
   final Map<String, TextEditingController> _ratingCommentsByKey = {};
@@ -72,6 +74,9 @@ class _FinalizeMatchScreenState
     _adminObservationController = TextEditingController(
       text: widget.match.observations ?? '',
     );
+    _selectedBestPlayerId = widget.match.bestPlayerId;
+    _selectedBestGoalkeeperId =
+        widget.match.bestGoalkeeperId;
     _homeObservationController = TextEditingController();
     _awayObservationController = TextEditingController();
     _loadLineups();
@@ -219,6 +224,30 @@ class _FinalizeMatchScreenState
       return;
     }
 
+    final allPlayers = _matchAwardCandidates();
+    if (allPlayers.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No hay alineaciones registradas. Registra alineaciones para seleccionar mejor jugador y mejor arquero.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (_selectedBestPlayerId == null ||
+        _selectedBestGoalkeeperId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Selecciona mejor jugador y mejor arquero del partido.',
+          ),
+        ),
+      );
+      return;
+    }
+
     if (_matchReferees.isNotEmpty) {
       for (final assignment in _matchReferees) {
         final homeKey = _ratingKey(
@@ -251,6 +280,8 @@ class _FinalizeMatchScreenState
         homeScore,
         awayScore,
         adminObservation.isEmpty ? null : adminObservation,
+        _selectedBestPlayerId,
+        _selectedBestGoalkeeperId,
       );
 
       if (homeObservation.isNotEmpty) {
@@ -343,6 +374,8 @@ class _FinalizeMatchScreenState
         padding: const EdgeInsets.all(20),
         children: [
           _buildScoreSection(),
+          const SizedBox(height: 12),
+          _buildBestAwardsSection(),
           const SizedBox(height: 12),
           _buildAdminObservationSection(),
           const SizedBox(height: 12),
@@ -451,6 +484,131 @@ class _FinalizeMatchScreenState
         ],
       ),
     );
+  }
+
+  Widget _buildBestAwardsSection() {
+    final candidates = _matchAwardCandidates();
+    final candidateIds = candidates.map((c) => c.playerId).toSet();
+    final safeBestPlayerId =
+        candidateIds.contains(_selectedBestPlayerId)
+            ? _selectedBestPlayerId
+            : null;
+    final safeBestGoalkeeperId =
+        candidateIds.contains(_selectedBestGoalkeeperId)
+            ? _selectedBestGoalkeeperId
+            : null;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: const Color(0xFF1A2332),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Premios del partido',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Obligatorio: mejor jugador y mejor arquero (cualquier posicion).',
+            style: TextStyle(color: Colors.white60),
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            key: ValueKey('best-player-${safeBestPlayerId ?? 'none'}'),
+            initialValue: safeBestPlayerId,
+            isExpanded: true,
+            items: candidates
+                .map(
+                  (c) => DropdownMenuItem<String>(
+                    value: c.playerId,
+                    child: Text(
+                      c.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                )
+                .toList(),
+            onChanged: _lineupsLoading || candidates.isEmpty
+                ? null
+                : (value) {
+                    setState(() => _selectedBestPlayerId = value);
+                  },
+            decoration: InputDecoration(
+              labelText: _lineupsLoading
+                  ? 'Cargando alineaciones...'
+                  : candidates.isEmpty
+                      ? 'Sin jugadores disponibles'
+                      : 'Mejor jugador',
+            ),
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            key: ValueKey(
+              'best-goalkeeper-${safeBestGoalkeeperId ?? 'none'}',
+            ),
+            initialValue: safeBestGoalkeeperId,
+            isExpanded: true,
+            items: candidates
+                .map(
+                  (c) => DropdownMenuItem<String>(
+                    value: c.playerId,
+                    child: Text(
+                      c.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                )
+                .toList(),
+            onChanged: _lineupsLoading || candidates.isEmpty
+                ? null
+                : (value) {
+                    setState(
+                      () => _selectedBestGoalkeeperId = value,
+                    );
+                  },
+            decoration: InputDecoration(
+              labelText: _lineupsLoading
+                  ? 'Cargando alineaciones...'
+                  : candidates.isEmpty
+                      ? 'Sin jugadores disponibles'
+                      : 'Mejor arquero',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<_AwardCandidate> _matchAwardCandidates() {
+    final byId = <String, _AwardCandidate>{};
+
+    for (final player in _homeLineup) {
+      byId[player.playerId] = _AwardCandidate(
+        playerId: player.playerId,
+        label:
+            '${player.playerName} (${widget.homeTeamName}) #${player.shirtNumber}',
+      );
+    }
+
+    for (final player in _awayLineup) {
+      byId[player.playerId] = _AwardCandidate(
+        playerId: player.playerId,
+        label:
+            '${player.playerName} (${widget.awayTeamName}) #${player.shirtNumber}',
+      );
+    }
+
+    return byId.values.toList()
+      ..sort((a, b) => a.label.compareTo(b.label));
   }
 
   Widget _buildAdminObservationSection() {
@@ -752,4 +910,14 @@ class _FinalizeMatchScreenState
         return role;
     }
   }
+}
+
+class _AwardCandidate {
+  final String playerId;
+  final String label;
+
+  _AwardCandidate({
+    required this.playerId,
+    required this.label,
+  });
 }

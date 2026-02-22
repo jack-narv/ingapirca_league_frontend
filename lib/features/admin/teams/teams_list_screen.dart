@@ -30,7 +30,10 @@ class _TeamsListScreenState extends State<TeamsListScreen> {
   late Future<List<Team>> _teamsFuture;
   late Future<List<SeasonCategory>>
       _categoriesFuture;
-  SeasonCategory? _selectedCategory;
+  String? _selectedCategoryId;
+  final ScrollController _scrollController = ScrollController(
+    keepScrollOffset: false,
+  );
 
   @override
   void initState() {
@@ -40,24 +43,36 @@ class _TeamsListScreenState extends State<TeamsListScreen> {
         .getCategoriesBySeason(widget.seasonId);
   }
 
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   void _refresh() {
     setState(() {
       _teamsFuture = _service.getBySeason(
         widget.seasonId,
-        categoryId: _selectedCategory?.id,
+        categoryId: _selectedCategoryId,
       );
     });
+    _scrollToTop();
   }
 
-  void _applyCategory(
-      SeasonCategory? category) {
+  void _applyCategory(String? categoryId) {
     setState(() {
-      _selectedCategory = category;
+      _selectedCategoryId = categoryId;
       _teamsFuture = _service.getBySeason(
         widget.seasonId,
-        categoryId: category?.id,
+        categoryId: categoryId,
       );
     });
+    _scrollToTop();
+  }
+
+  void _scrollToTop() {
+    if (!_scrollController.hasClients) return;
+    _scrollController.jumpTo(0);
   }
 
   void _handleBottomNavTap(int index) {
@@ -113,6 +128,7 @@ class _TeamsListScreenState extends State<TeamsListScreen> {
 
           final teams = snapshot.data!;
           return ListView.builder(
+            controller: _scrollController,
             padding: const EdgeInsets.all(20),
             itemCount: teams.isEmpty ? 2 : teams.length + 1,
             itemBuilder: (context, index) {
@@ -122,29 +138,36 @@ class _TeamsListScreenState extends State<TeamsListScreen> {
                   builder: (context, categorySnapshot) {
                     final categories =
                         categorySnapshot.data ?? [];
+                    final validCategoryIds = categories
+                        .map((c) => c.id)
+                        .toSet();
+                    final safeSelectedCategoryId =
+                        validCategoryIds.contains(_selectedCategoryId)
+                            ? _selectedCategoryId
+                            : null;
 
                     return Container(
                       margin: const EdgeInsets.only(
                           bottom: 16),
-                      child: DropdownButtonFormField<
-                          SeasonCategory?>(
-                        value: _selectedCategory,
+                      child: DropdownButtonFormField<String?>(
+                        key: ValueKey(
+                          'team-category-${safeSelectedCategoryId ?? 'all'}',
+                        ),
+                        initialValue: safeSelectedCategoryId,
                         decoration:
                             const InputDecoration(
                           labelText:
                               "Filtrar por categoria",
                         ),
                         items: [
-                          const DropdownMenuItem<
-                              SeasonCategory?>(
+                          const DropdownMenuItem<String?>(
                             value: null,
                             child: Text(
                                 "Todas las categorias"),
                           ),
                           ...categories.map((category) =>
-                              DropdownMenuItem<
-                                  SeasonCategory?>(
-                                value: category,
+                              DropdownMenuItem<String?>(
+                                value: category.id,
                                 child:
                                     Text(category.name),
                               )),

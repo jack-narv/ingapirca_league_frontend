@@ -13,6 +13,8 @@ class Match{
   final int homeScore;
   final int awayScore;
   final String? observations;
+  final String? bestPlayerId;
+  final String? bestGoalkeeperId;
 
   Match({
     required this.id,
@@ -27,6 +29,8 @@ class Match{
     required this.homeScore,
     required this.awayScore,
     this.observations,
+    this.bestPlayerId,
+    this.bestGoalkeeperId,
   });
 
   factory Match.fromJson(Map<String, dynamic> json){
@@ -46,6 +50,9 @@ class Match{
       homeScore: json['home_score'],
       awayScore: json['away_score'],
       observations: json['observations'],
+      bestPlayerId: json['best_player_id']?.toString(),
+      bestGoalkeeperId:
+          json['best_goalkeeper_id']?.toString(),
     );
   }
 }

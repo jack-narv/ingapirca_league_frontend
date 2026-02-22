@@ -26,13 +26,22 @@ class _StandingsScreenState extends State<StandingsScreen> {
 
   late Future<List<SeasonCategory>> _categoriesFuture;
   late Future<List<Standing>> _standingsFuture;
-  SeasonCategory? _selectedCategory;
+  String? _selectedCategoryId;
+  final ScrollController _scrollController = ScrollController(
+    keepScrollOffset: false,
+  );
 
   @override
   void initState() {
     super.initState();
     _categoriesFuture = _seasonsService.getCategoriesBySeason(widget.seasonId);
     _standingsFuture = _standingsService.getBySeason(widget.seasonId);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   void _handleBottomNavTap(int index) {
@@ -52,14 +61,20 @@ class _StandingsScreenState extends State<StandingsScreen> {
     );
   }
 
-  void _applyCategory(SeasonCategory? category) {
+  void _applyCategory(String? categoryId) {
     setState(() {
-      _selectedCategory = category;
+      _selectedCategoryId = categoryId;
       _standingsFuture = _standingsService.getBySeason(
         widget.seasonId,
-        categoryId: category?.id,
+        categoryId: categoryId,
       );
     });
+    _scrollToTop();
+  }
+
+  void _scrollToTop() {
+    if (!_scrollController.hasClients) return;
+    _scrollController.jumpTo(0);
   }
 
   Widget _buildTeamCell(Standing row) {
@@ -125,6 +140,7 @@ class _StandingsScreenState extends State<StandingsScreen> {
           columns: const [
             DataColumn(label: Text('#')),
             DataColumn(label: Text('Equipo')),
+            DataColumn(numeric: true, label: Text('Pts')),
             DataColumn(numeric: true, label: Text('PJ')),
             DataColumn(numeric: true, label: Text('G')),
             DataColumn(numeric: true, label: Text('E')),
@@ -132,12 +148,17 @@ class _StandingsScreenState extends State<StandingsScreen> {
             DataColumn(numeric: true, label: Text('GF')),
             DataColumn(numeric: true, label: Text('GC')),
             DataColumn(numeric: true, label: Text('DG')),
-            DataColumn(numeric: true, label: Text('Pts')),
           ],
           rows: List.generate(rows.length, (index) {
             final row = rows[index];
-            final isTop = index < 3;
-            final rankColor = isTop ? const Color(0xFF22D3EE) : Colors.white70;
+            final isTopFour = index < 4;
+            final isBottomTwo =
+                rows.length >= 2 && index >= rows.length - 2;
+            final rankColor = isTopFour
+                ? const Color(0xFF22D3EE)
+                : isBottomTwo
+                    ? const Color(0xFFFF6B6B)
+                    : Colors.white70;
 
             return DataRow(
               cells: [
@@ -151,13 +172,6 @@ class _StandingsScreenState extends State<StandingsScreen> {
                   ),
                 ),
                 DataCell(SizedBox(width: 180, child: _buildTeamCell(row))),
-                DataCell(Text("${row.played}")),
-                DataCell(Text("${row.wins}")),
-                DataCell(Text("${row.draws}")),
-                DataCell(Text("${row.losses}")),
-                DataCell(Text("${row.goalsFor}")),
-                DataCell(Text("${row.goalsAgainst}")),
-                DataCell(Text("${row.goalDifference}")),
                 DataCell(
                   Text(
                     "${row.points}",
@@ -167,6 +181,13 @@ class _StandingsScreenState extends State<StandingsScreen> {
                     ),
                   ),
                 ),
+                DataCell(Text("${row.played}")),
+                DataCell(Text("${row.wins}")),
+                DataCell(Text("${row.draws}")),
+                DataCell(Text("${row.losses}")),
+                DataCell(Text("${row.goalsFor}")),
+                DataCell(Text("${row.goalsAgainst}")),
+                DataCell(Text("${row.goalDifference}")),
               ],
             );
           }),
@@ -191,30 +212,40 @@ class _StandingsScreenState extends State<StandingsScreen> {
           final rows = standingsSnapshot.data!;
 
           return ListView(
+            controller: _scrollController,
             padding: const EdgeInsets.all(20),
             children: [
               FutureBuilder<List<SeasonCategory>>(
                 future: _categoriesFuture,
                 builder: (context, categorySnapshot) {
                   final categories = categorySnapshot.data ?? [];
+                  final validCategoryIds = categories
+                      .map((c) => c.id)
+                      .toSet();
+                  final safeSelectedCategoryId =
+                      validCategoryIds.contains(_selectedCategoryId)
+                          ? _selectedCategoryId
+                          : null;
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 16),
-                    child: DropdownButtonFormField<SeasonCategory?>(
-                      key: ValueKey(_selectedCategory?.id ?? 'all-categories'),
-                      initialValue: _selectedCategory,
+                    child: DropdownButtonFormField<String?>(
+                      key: ValueKey(
+                        safeSelectedCategoryId ?? 'all-categories',
+                      ),
+                      initialValue: safeSelectedCategoryId,
                       decoration: const InputDecoration(
                         labelText: "Filtrar por categoria",
                         prefixIcon: Icon(Icons.category),
                       ),
                       items: [
-                        const DropdownMenuItem<SeasonCategory?>(
+                        const DropdownMenuItem<String?>(
                           value: null,
                           child: Text("Todas las categorias"),
                         ),
                         ...categories.map(
-                          (category) => DropdownMenuItem<SeasonCategory?>(
-                            value: category,
+                          (category) => DropdownMenuItem<String?>(
+                            value: category.id,
                             child: Text(category.name),
                           ),
                         ),
