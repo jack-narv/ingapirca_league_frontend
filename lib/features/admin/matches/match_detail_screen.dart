@@ -838,6 +838,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
           final e = _events[index];
           final minute = e['minute']?.toString() ?? '0';
           final type = (e['event_type'] ?? 'EVENT').toString();
+          final typeLabel = _eventLabelEs(type);
           final playerName = (e['player_name'] ?? '').toString();
           final shirt = e['shirt_number']?.toString();
           final teamName = (e['team_name'] ?? '').toString();
@@ -876,7 +877,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        type,
+                        typeLabel,
                         style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(height: 4),
@@ -1511,6 +1512,27 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
         return Colors.cyanAccent;
       default:
         return Colors.blueGrey;
+    }
+  }
+
+  String _eventLabelEs(String type) {
+    switch (type.toUpperCase()) {
+      case 'GOAL':
+        return 'GOL';
+      case 'YELLOW':
+      case 'YELLOW_CARD':
+        return 'AMARILLA';
+      case 'RED':
+      case 'RED_CARD':
+        return 'ROJA';
+      case 'SUB_IN':
+        return 'ENTRA';
+      case 'SUB_OUT':
+        return 'SALE';
+      case 'OWN_GOAL':
+        return 'AUTOGOL';
+      default:
+        return type;
     }
   }
 

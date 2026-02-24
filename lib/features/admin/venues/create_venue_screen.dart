@@ -4,7 +4,12 @@ import '../../../core/widgets/primary_gradient_button.dart';
 import '../../../services/venues_service.dart';
 
 class CreateVenueScreen extends StatefulWidget{
-  const CreateVenueScreen({super.key});
+  final String seasonId;
+
+  const CreateVenueScreen({
+    super.key,
+    required this.seasonId,
+  });
 
   @override
   State<CreateVenueScreen> createState() =>
@@ -37,6 +42,7 @@ class _CreateVenueScreenState
 
       try{
         await _service.create(
+          seasonId: widget.seasonId,
           name: _name.text.trim(),
           address:
             _address.text.trim().isEmpty

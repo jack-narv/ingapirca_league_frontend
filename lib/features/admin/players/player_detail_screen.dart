@@ -1,12 +1,26 @@
 import 'package:flutter/material.dart';
 import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../models/player.dart';
+import '../../../models/match_event.dart';
+import '../../../models/match_lineup.dart';
+import '../../../models/player_statistics.dart';
+import '../../../services/match_events_service.dart';
+import '../../../services/match_lineups_service.dart';
+import '../../../services/matches_service.dart';
+import '../../../services/player_statistics_service.dart';
 import '../../../services/players_service.dart';
 
 class PlayerDetailScreen extends StatefulWidget {
   final String playerId;
+  final String seasonId;
+  final String? teamId;
 
-  const PlayerDetailScreen({super.key, required this.playerId});
+  const PlayerDetailScreen({
+    super.key,
+    required this.playerId,
+    required this.seasonId,
+    this.teamId,
+  });
 
   @override
   State<PlayerDetailScreen> createState() =>
@@ -16,12 +30,163 @@ class PlayerDetailScreen extends StatefulWidget {
 class _PlayerDetailScreenState
     extends State<PlayerDetailScreen> {
   final PlayersService _service = PlayersService();
-  late Future<Player> _future;
+  final MatchesService _matchesService = MatchesService();
+  final MatchLineupsService _lineupsService = MatchLineupsService();
+  final MatchEventsService _eventsService = MatchEventsService();
+  final PlayerStatisticsService _playerStatisticsService =
+      PlayerStatisticsService();
+  late Future<_PlayerDetailData> _future;
 
   @override
   void initState() {
     super.initState();
-    _future = _service.getPlayer(widget.playerId);
+    _future = _loadPlayerDetailData();
+  }
+
+  Future<_PlayerDetailData> _loadPlayerDetailData() async {
+    final player = await _service.getPlayer(widget.playerId);
+    final stats = await _loadPlayerStats(player);
+    return _PlayerDetailData(player: player, stats: stats);
+  }
+
+  Future<_PlayerStats> _loadPlayerStats(Player player) async {
+    final fallbackTeamId =
+        player.teamInfo.isNotEmpty ? player.teamInfo.first.teamId : null;
+    final teamId = widget.teamId ?? fallbackTeamId;
+    if (teamId == null || teamId.isEmpty) {
+      return const _PlayerStats.empty();
+    }
+
+    final derivedStats = await _loadDerivedStatsFromMatches(
+      player: player,
+      teamId: teamId,
+    );
+
+    try {
+      final stats = await _playerStatisticsService.getByPlayerSeason(
+        player.id,
+        widget.seasonId,
+      );
+      return derivedStats.applySeasonStatistics(stats);
+    } catch (_) {
+      return derivedStats;
+    }
+  }
+
+  Future<_PlayerStats> _loadDerivedStatsFromMatches({
+    required Player player,
+    required String teamId,
+  }) async {
+    final seasonMatches = await _matchesService.getBySeason(widget.seasonId);
+    final teamMatches = seasonMatches
+        .where(
+          (m) => m.homeTeamId == teamId || m.awayTeamId == teamId,
+        )
+        .toList()
+      ..sort((a, b) => a.matchDate.compareTo(b.matchDate));
+
+    int matchesPlayed = 0;
+    int starts = 0;
+    int goals = 0;
+    int ownGoals = 0;
+    int yellowCards = 0;
+    int redCards = 0;
+    int subIns = 0;
+    int subOuts = 0;
+
+    for (final match in teamMatches) {
+      MatchLineupPlayer? lineupPlayer;
+      List<MatchEvent> events = const [];
+
+      try {
+        final lineup = await _lineupsService.getLineup(match.id, teamId);
+        for (final playerLineup in lineup) {
+          if (playerLineup.playerId == player.id) {
+            lineupPlayer = playerLineup;
+            break;
+          }
+        }
+      } catch (_) {
+        // Best effort if lineup endpoint fails for this match.
+      }
+
+      try {
+        events = await _eventsService.getTimeline(match.id);
+      } catch (_) {
+        // Best effort if events endpoint fails for this match.
+      }
+
+      final playerEvents = events
+          .where((event) => event.playerId == player.id)
+          .toList();
+
+      final hasEventParticipation = playerEvents.any((event) {
+        final type = event.eventType.toUpperCase();
+        return type == 'GOAL' ||
+            type == 'OWN_GOAL' ||
+            type == 'YELLOW' ||
+            type == 'YELLOW_CARD' ||
+            type == 'RED' ||
+            type == 'RED_CARD' ||
+            type == 'SUB_IN' ||
+            type == 'SUB_OUT';
+      });
+
+      final playedThisMatch =
+          match.status.toUpperCase() == 'PLAYED' &&
+          (lineupPlayer != null || hasEventParticipation);
+
+      if (playedThisMatch) {
+        matchesPlayed++;
+      }
+      if (lineupPlayer?.isStarting == true) {
+        starts++;
+      }
+
+      for (final event in playerEvents) {
+        switch (event.eventType.toUpperCase()) {
+          case 'GOAL':
+            goals++;
+            break;
+          case 'OWN_GOAL':
+            ownGoals++;
+            break;
+          case 'YELLOW':
+          case 'YELLOW_CARD':
+            yellowCards++;
+            break;
+          case 'RED':
+          case 'RED_CARD':
+            redCards++;
+            break;
+          case 'SUB_IN':
+            subIns++;
+            break;
+          case 'SUB_OUT':
+            subOuts++;
+            break;
+          default:
+            break;
+        }
+      }
+    }
+
+    final totalCards = yellowCards + redCards;
+    final suspensions = redCards;
+
+    return _PlayerStats(
+      matchesPlayed: matchesPlayed,
+      starts: starts,
+      goals: goals,
+      assists: 0,
+      ownGoals: ownGoals,
+      yellowCards: yellowCards,
+      redCards: redCards,
+      totalCards: totalCards,
+      suspensions: suspensions,
+      subIns: subIns,
+      subOuts: subOuts,
+    );
   }
 
   @override
@@ -30,7 +195,7 @@ class _PlayerDetailScreenState
       title: "Detalle Jugador",
       currentIndex: 0,
       onNavTap: (_) {},
-      body: FutureBuilder<Player>(
+      body: FutureBuilder<_PlayerDetailData>(
         future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState ==
@@ -43,7 +208,7 @@ class _PlayerDetailScreenState
           if (snapshot.hasError) {
             return const Center(
               child: Text(
-                "No se pudo cargar el jugador",
+                "No se pudo cargar el jugador y sus estadisticas",
                 style: TextStyle(color: Colors.white70),
               ),
             );
@@ -58,7 +223,9 @@ class _PlayerDetailScreenState
             );
           }
 
-          final player = snapshot.data!;
+          final detail = snapshot.data!;
+          final player = detail.player;
+          final stats = detail.stats;
           final currentTeam = player.teamInfo.isNotEmpty
               ? player.teamInfo.first
               : null;
@@ -87,7 +254,7 @@ class _PlayerDetailScreenState
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.45),
+                        color: Colors.black.withValues(alpha: 0.45),
                         blurRadius: 18,
                         offset: const Offset(0, 10),
                       ),
@@ -100,7 +267,7 @@ class _PlayerDetailScreenState
                         backgroundColor: Theme.of(context)
                             .colorScheme
                             .primary
-                            .withOpacity(0.2),
+                            .withValues(alpha: 0.2),
                         foregroundImage: photo,
                         onForegroundImageError:
                             photo != null ? (_, _) {} : null,
@@ -179,18 +346,12 @@ class _PlayerDetailScreenState
                   ],
                 ),
                 const SizedBox(height: 24),
-                Row(
-                  children: const [
-                    Text(
-                      "Estadisticas",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    SizedBox(width: 10),
-                    _SoonBadge(),
-                  ],
+                const Text(
+                  "Estadisticas",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 GridView.count(
@@ -200,28 +361,51 @@ class _PlayerDetailScreenState
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   childAspectRatio: 1.8,
-                  children: const [
+                  children: [
                     _StatTile(
                       label: "Partidos",
-                      value: "--",
+                      value: "${stats.matchesPlayed}",
                       icon: Icons.sports,
                     ),
                     _StatTile(
                       label: "Goles",
-                      value: "--",
+                      value: "${stats.goals}",
                       icon: Icons.sports_soccer,
                     ),
                     _StatTile(
                       label: "Tarjetas",
-                      value: "--",
+                      value: "${stats.totalCards}",
                       icon: Icons.style_outlined,
                     ),
                     _StatTile(
                       label: "Suspensiones",
-                      value: "--",
+                      value: "${stats.suspensions}",
                       icon: Icons.block_outlined,
                     ),
                   ],
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    color: const Color(0xFF1A2332),
+                    border: Border.all(color: Colors.white10),
+                  ),
+                  child: Wrap(
+                    spacing: 14,
+                    runSpacing: 10,
+                    children: [
+                      _miniStat("Titular", stats.starts),
+                      _miniStat("Asistencias", stats.assists),
+                      _miniStat("Autogoles", stats.ownGoals),
+                      _miniStat("Amarillas", stats.yellowCards),
+                      _miniStat("Rojas", stats.redCards),
+                      _miniStat("Sub In", stats.subIns),
+                      _miniStat("Sub Out", stats.subOuts),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -263,6 +447,16 @@ class _PlayerDetailScreenState
     );
   }
 
+  Widget _miniStat(String label, int value) {
+    return Text(
+      "$label: $value",
+      style: const TextStyle(
+        color: Colors.white70,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+
   ImageProvider<Object>? _buildPhoto(String? url) {
     final value = url?.trim() ?? '';
     if (value.isEmpty) return null;
@@ -270,31 +464,69 @@ class _PlayerDetailScreenState
   }
 }
 
-class _SoonBadge extends StatelessWidget {
-  const _SoonBadge();
+class _PlayerDetailData {
+  final Player player;
+  final _PlayerStats stats;
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 10,
-        vertical: 4,
-      ),
-      decoration: BoxDecoration(
-        color: Theme.of(context)
-            .colorScheme
-            .primary
-            .withOpacity(0.15),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        "Proximamente",
-        style: TextStyle(
-          color: Theme.of(context).colorScheme.primary,
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
+  _PlayerDetailData({
+    required this.player,
+    required this.stats,
+  });
+}
+
+class _PlayerStats {
+  final int matchesPlayed;
+  final int starts;
+  final int goals;
+  final int assists;
+  final int ownGoals;
+  final int yellowCards;
+  final int redCards;
+  final int totalCards;
+  final int suspensions;
+  final int subIns;
+  final int subOuts;
+
+  const _PlayerStats({
+    required this.matchesPlayed,
+    required this.starts,
+    required this.goals,
+    required this.assists,
+    required this.ownGoals,
+    required this.yellowCards,
+    required this.redCards,
+    required this.totalCards,
+    required this.suspensions,
+    required this.subIns,
+    required this.subOuts,
+  });
+
+  const _PlayerStats.empty()
+      : matchesPlayed = 0,
+        starts = 0,
+        goals = 0,
+        assists = 0,
+        ownGoals = 0,
+        yellowCards = 0,
+        redCards = 0,
+        totalCards = 0,
+        suspensions = 0,
+        subIns = 0,
+        subOuts = 0;
+
+  _PlayerStats applySeasonStatistics(PlayerStatistics stats) {
+    return _PlayerStats(
+      matchesPlayed: matchesPlayed,
+      starts: starts,
+      goals: stats.goals,
+      assists: stats.assists,
+      ownGoals: ownGoals,
+      yellowCards: stats.yellowCards,
+      redCards: stats.redCards,
+      totalCards: stats.totalCards,
+      suspensions: stats.redCards,
+      subIns: subIns,
+      subOuts: subOuts,
     );
   }
 }
@@ -319,7 +551,7 @@ class _StatTile extends StatelessWidget {
         color: const Color(0xFF1A2332),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.25),
+            color: Colors.black.withValues(alpha: 0.25),
             blurRadius: 10,
             offset: const Offset(0, 6),
           ),

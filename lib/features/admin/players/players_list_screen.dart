@@ -9,9 +9,11 @@ import '../../../models/team_player.dart';
 
 class PlayersListScreen extends StatefulWidget {
   final Team team;
+  final String seasonId;
   const PlayersListScreen({
       super.key,
-      required this.team
+      required this.team,
+      required this.seasonId,
     });
 
   @override
@@ -110,7 +112,11 @@ class _PlayersListScreenState extends State<PlayersListScreen> {
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) =>
-                            PlayerDetailScreen(playerId: playerId),
+                            PlayerDetailScreen(
+                              playerId: playerId,
+                              seasonId: widget.seasonId,
+                              teamId: widget.team.id,
+                            ),
                       ),
                     );
                   } catch (e) {
@@ -136,7 +142,7 @@ class _PlayersListScreenState extends State<PlayersListScreen> {
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.4),
+                          color: Colors.black.withValues(alpha: 0.4),
                           blurRadius: 14,
                           offset: const Offset(0, 8),
                         ),
@@ -149,7 +155,7 @@ class _PlayersListScreenState extends State<PlayersListScreen> {
                           backgroundColor: Theme.of(context)
                               .colorScheme
                               .primary
-                              .withOpacity(0.2),
+                              .withValues(alpha: 0.2),
                           foregroundImage: photo,
                           onForegroundImageError:
                               photo != null ? (_, _) {} : null,
@@ -207,7 +213,7 @@ class _PlayersListScreenState extends State<PlayersListScreen> {
       padding:
           const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(

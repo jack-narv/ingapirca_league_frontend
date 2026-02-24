@@ -6,7 +6,14 @@ import '../../../services/auth_service.dart';
 import 'create_venue_screen.dart';
 
 class VenuesListScreen extends StatefulWidget{
-  const VenuesListScreen({super.key});
+  final String seasonId;
+  final String seasonName;
+
+  const VenuesListScreen({
+    super.key,
+    required this.seasonId,
+    required this.seasonName,
+  });
 
   @override
   State<VenuesListScreen> createState() =>
@@ -22,19 +29,19 @@ class _VenuesListScreenState
     @override
     void initState(){
       super.initState();
-      _future = _service.getAll();
+      _future = _service.getBySeason(widget.seasonId);
     }
 
     void _refresh(){
       setState(() {
-        _future = _service.getAll();
+        _future = _service.getBySeason(widget.seasonId);
       });
     }
 
     @override
   Widget build(BuildContext context) {
     return AppScaffoldWithNav(
-      title: "Escenarios",
+      title: "Escenarios - ${widget.seasonName}",
       currentIndex: 0,
       onNavTap: (_) {},
       floatingActionButton: FutureBuilder<bool>(
@@ -50,7 +57,9 @@ class _VenuesListScreenState
                 context,
                 MaterialPageRoute(
                   builder: (_) =>
-                      const CreateVenueScreen(),
+                      CreateVenueScreen(
+                        seasonId: widget.seasonId,
+                      ),
                 ),
               );
               _refresh();
@@ -103,7 +112,7 @@ class _VenuesListScreenState
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black
-                          .withOpacity(0.4),
+                          .withValues(alpha: 0.4),
                       blurRadius: 14,
                       offset:
                           const Offset(0, 8),

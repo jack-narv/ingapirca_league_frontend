@@ -4,8 +4,9 @@ import '../../models/season.dart';
 import '../admin/referees/referees_list_screen.dart';
 import '../admin/standings/standings_screen.dart';
 import '../admin/teams/teams_list_screen.dart';
+import '../admin/venues/venues_list_screen.dart';
 import 'home_screen.dart';
-import 'season_statistics_screen.dart';
+import '../admin/seasons/season_statistics_screen.dart';
 import '../admin/matches/matches_list_screen.dart';
 
 class HomeScreenSeason extends StatelessWidget {
@@ -129,6 +130,21 @@ class HomeScreenSeason extends StatelessWidget {
                         context,
                         MaterialPageRoute(
                           builder: (_) => RefereesListScreen(
+                            seasonId: season.id,
+                            seasonName: season.name,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  _DashboardCard(
+                    title: "Escenarios",
+                    icon: Icons.location_on,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => VenuesListScreen(
                             seasonId: season.id,
                             seasonName: season.name,
                           ),

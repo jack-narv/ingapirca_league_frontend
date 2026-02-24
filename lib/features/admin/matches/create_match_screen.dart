@@ -74,7 +74,7 @@ class _CreateMatchScreenState
     super.initState();
     _teamsFuture = Future.value([]);
     _venuesFuture =
-        _venuesService.getAll();
+        _venuesService.getBySeason(widget.seasonId);
     _refereesFuture =
         _loadActiveReferees();
     _loadCategories();

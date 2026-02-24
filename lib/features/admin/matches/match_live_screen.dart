@@ -323,6 +323,9 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
   }
 
   Widget _buildScoreboard() {
+    final homeName = _homeTeam?.name ?? 'Local';
+    final awayName = _awayTeam?.name ?? 'Visitante';
+
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -353,15 +356,45 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          Text(
-            '$_homeScore  -  $_awayScore',
-            style: TextStyle(
-              fontSize: 42,
-              fontWeight: FontWeight.bold,
-              color: _connected ? Colors.greenAccent : Colors.white,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: _buildScoreTeamInfo(
+                  name: homeName,
+                  logoUrl: _homeTeam?.logoUrl,
+                  alignEnd: false,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                '$_homeScore  -  $_awayScore',
+                style: TextStyle(
+                  fontSize: 42,
+                  fontWeight: FontWeight.bold,
+                  color: _connected ? Colors.greenAccent : Colors.white,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildScoreTeamInfo(
+                  name: awayName,
+                  logoUrl: _awayTeam?.logoUrl,
+                  alignEnd: true,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 10),
+          Text(
+            '$homeName vs $awayName',
+            style: const TextStyle(
+              color: Colors.white60,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
           Text(
             'Match ID: ${widget.matchId}',
             style: const TextStyle(
@@ -371,6 +404,69 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildScoreTeamInfo({
+    required String name,
+    required String? logoUrl,
+    required bool alignEnd,
+  }) {
+    final initials = name.isNotEmpty ? name[0].toUpperCase() : '?';
+    return Row(
+      mainAxisAlignment:
+          alignEnd ? MainAxisAlignment.end : MainAxisAlignment.start,
+      children: [
+        if (!alignEnd) ...[
+          CircleAvatar(
+            radius: 16,
+            backgroundColor: const Color(0xFF1A2332),
+            backgroundImage:
+                (logoUrl != null && logoUrl.isNotEmpty) ? NetworkImage(logoUrl) : null,
+            child: (logoUrl == null || logoUrl.isEmpty)
+                ? Text(
+                    initials,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  )
+                : null,
+          ),
+          const SizedBox(width: 8),
+        ],
+        Flexible(
+          child: Text(
+            name,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: alignEnd ? TextAlign.end : TextAlign.start,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+          ),
+        ),
+        if (alignEnd) ...[
+          const SizedBox(width: 8),
+          CircleAvatar(
+            radius: 16,
+            backgroundColor: const Color(0xFF1A2332),
+            backgroundImage:
+                (logoUrl != null && logoUrl.isNotEmpty) ? NetworkImage(logoUrl) : null,
+            child: (logoUrl == null || logoUrl.isEmpty)
+                ? Text(
+                    initials,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  )
+                : null,
+          ),
+        ],
+      ],
     );
   }
 
@@ -415,6 +511,7 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
 
   Widget _buildEventTile(Map<String, dynamic> e) {
     final type = (e['type'] ?? e['event_type'] ?? 'EVENT').toString();
+    final typeLabel = _eventLabelEs(type);
     final minute = e['minute']?.toString();
     final playerName = (e['player_name'] ?? '').toString();
     final shirt = e['shirt_number']?.toString();
@@ -457,7 +554,7 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  minute == null ? type : "$type • $minute'",
+                  minute == null ? typeLabel : "$typeLabel • $minute'",
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                   ),
@@ -534,6 +631,27 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
         return Colors.cyanAccent;
       default:
         return Colors.blueGrey;
+    }
+  }
+
+  String _eventLabelEs(String type) {
+    switch (type.toUpperCase()) {
+      case 'GOAL':
+        return 'GOL';
+      case 'YELLOW':
+      case 'YELLOW_CARD':
+        return 'AMARILLA';
+      case 'RED':
+      case 'RED_CARD':
+        return 'ROJA';
+      case 'SUB_IN':
+        return 'ENTRA';
+      case 'SUB_OUT':
+        return 'SALE';
+      case 'OWN_GOAL':
+        return 'AUTOGOL';
+      default:
+        return type;
     }
   }
 }

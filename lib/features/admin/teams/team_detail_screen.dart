@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../models/team.dart';
 import '../players/players_list_screen.dart';
+import 'team_matches_screen.dart';
 import 'team_statistics_screen.dart';
 
 class TeamDetailScreen extends StatefulWidget {
@@ -105,7 +106,10 @@ class _TeamDetailScreenState
               context,
               MaterialPageRoute(
                 builder: (_) =>
-                    PlayersListScreen(team: widget.team),
+                    PlayersListScreen(
+                      team: widget.team,
+                      seasonId: widget.seasonId,
+                    ),
               ),
             );
           },
@@ -114,7 +118,17 @@ class _TeamDetailScreenState
           icon: Icons.sports_soccer,
           title: "Partidos",
           subtitle: "Calendario y resultados",
-          onTap: () => _showSoon("Partidos"),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => TeamMatchesScreen(
+                  team: widget.team,
+                  seasonId: widget.seasonId,
+                ),
+              ),
+            );
+          },
         ),
         _menuCard(
           icon: Icons.query_stats_rounded,
@@ -207,16 +221,6 @@ class _TeamDetailScreenState
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  void _showSoon(String moduleName) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          "$moduleName estara disponible proximamente",
         ),
       ),
     );

@@ -37,7 +37,7 @@ class _CreatePlayerScreenState
     final date = await showDatePicker(
       context: context,
       initialDate: DateTime(2000),
-      firstDate: DateTime(1970),
+      firstDate: DateTime(1900),
       lastDate: DateTime.now(),
     );
 

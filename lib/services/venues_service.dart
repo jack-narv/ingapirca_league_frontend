@@ -31,8 +31,23 @@ class VenuesService{
     }
   }
 
+  //Get venues by season
+  Future<List<Venue>> getBySeason(String seasonId) async {
+    final response = await http.get(
+      Uri.parse("$baseUrl/venues/season/$seasonId"),
+    );
+
+    if (response.statusCode == 200) {
+      final List data = jsonDecode(response.body);
+      return data.whereType<Map<String, dynamic>>().map(Venue.fromJson).toList();
+    }
+
+    throw Exception("Error obteniendo escenarios por temporada");
+  }
+
   //Create
   Future<void> create({
+    required String seasonId,
     required String name,
     String? address,
   }) async{
@@ -40,6 +55,7 @@ class VenuesService{
       Uri.parse("$baseUrl/venues"),
       headers: await _headers(),
       body: jsonEncode({
+        "season_id": seasonId,
         "name": name,
         "address": address,
       }),
