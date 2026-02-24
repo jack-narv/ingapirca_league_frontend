@@ -178,16 +178,20 @@ class _AddMatchEventDialogState
                   value: 'YELLOW',
                   child: Text('Amarilla')),
               DropdownMenuItem(
-                  value: 'RED', child: Text('Roja')),
+                  value: 'RED_DIRECT',
+                  child: Text('Roja Directa')),
+              DropdownMenuItem(
+                  value: 'DOBLE_YELLOW_RED',
+                  child: Text('Roja por 2 Amarillas')),
               DropdownMenuItem(
                   value: 'OWN_GOAL',
                   child: Text('Autogol')),
               DropdownMenuItem(
                   value: 'SUB_IN',
-                  child: Text('Sustitucion In')),
+                  child: Text('Sustitucion (Entra)')),
               DropdownMenuItem(
                   value: 'SUB_OUT',
-                  child: Text('Sustitucion Out')),
+                  child: Text('Sustitucion (Sale)')),
             ],
             decoration:
                 const InputDecoration(labelText: "Tipo"),

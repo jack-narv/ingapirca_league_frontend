@@ -540,14 +540,7 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
       ),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: color.withValues(alpha: 0.15),
-            ),
-            child: Icon(icon, color: color),
-          ),
+          _buildEventMarker(type, icon, color),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -597,13 +590,15 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
   }
 
   IconData _eventIcon(String type) {
-    switch (type.toUpperCase()) {
+    switch (_normalizeEventType(type)) {
       case 'GOAL':
         return Icons.sports_soccer;
       case 'YELLOW_CARD':
       case 'YELLOW':
         return Icons.square;
       case 'RED_CARD':
+      case 'RED_DIRECT':
+      case 'DOUBLE_YELLOW_RED':
       case 'RED':
         return Icons.block;
       case 'SUBSTITUTION':
@@ -616,13 +611,15 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
   }
 
   Color _eventColor(String type) {
-    switch (type.toUpperCase()) {
+    switch (_normalizeEventType(type)) {
       case 'GOAL':
         return Colors.greenAccent;
       case 'YELLOW_CARD':
       case 'YELLOW':
         return Colors.amber;
       case 'RED_CARD':
+      case 'RED_DIRECT':
+      case 'DOUBLE_YELLOW_RED':
       case 'RED':
         return Colors.redAccent;
       case 'SUBSTITUTION':
@@ -635,7 +632,7 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
   }
 
   String _eventLabelEs(String type) {
-    switch (type.toUpperCase()) {
+    switch (_normalizeEventType(type)) {
       case 'GOAL':
         return 'GOL';
       case 'YELLOW':
@@ -644,6 +641,10 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
       case 'RED':
       case 'RED_CARD':
         return 'ROJA';
+      case 'RED_DIRECT':
+        return 'ROJA DIRECTA';
+      case 'DOUBLE_YELLOW_RED':
+        return 'ROJA POR DOS AMARILLAS';
       case 'SUB_IN':
         return 'ENTRA';
       case 'SUB_OUT':
@@ -653,5 +654,73 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
       default:
         return type;
     }
+  }
+
+  String _normalizeEventType(String type) {
+    final normalized = type
+        .trim()
+        .toUpperCase()
+        .replaceAll('-', '_')
+        .replaceAll(RegExp(r'\s+'), '_');
+
+    if (normalized == 'DOBLE_YELLOW_RED') {
+      return 'DOUBLE_YELLOW_RED';
+    }
+
+    if ((normalized.contains('DOUBLE') || normalized.contains('DOBLE')) &&
+        normalized.contains('YELLOW') &&
+        normalized.contains('RED')) {
+      return 'DOUBLE_YELLOW_RED';
+    }
+
+    return normalized;
+  }
+
+  Widget _buildEventMarker(String type, IconData icon, Color color) {
+    final normalizedType = _normalizeEventType(type);
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color.withValues(alpha: 0.15),
+      ),
+      child: normalizedType == 'DOUBLE_YELLOW_RED'
+          ? SizedBox(
+              width: 22,
+              height: 22,
+              child: Stack(
+                children: [
+                  Positioned(
+                    left: 0,
+                    top: 3,
+                    child: _buildCardIcon(Colors.amber),
+                  ),
+                  Positioned(
+                    left: 6,
+                    top: 5,
+                    child: _buildCardIcon(Colors.amber),
+                  ),
+                  Positioned(
+                    left: 12,
+                    top: 7,
+                    child: _buildCardIcon(Colors.redAccent),
+                  ),
+                ],
+              ),
+            )
+          : Icon(icon, color: color),
+    );
+  }
+
+  Widget _buildCardIcon(Color color) {
+    return Container(
+      width: 8,
+      height: 11,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(1.5),
+      ),
+    );
   }
 }
