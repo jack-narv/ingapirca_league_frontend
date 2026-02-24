@@ -328,7 +328,7 @@ class _CreateMatchScreenState
         ),
       ),
       child: DropdownButtonFormField<T>(
-        value: value,
+        initialValue: value,
         dropdownColor:
             const Color(0xFF1E293B),
         decoration: InputDecoration(
@@ -446,9 +446,7 @@ class _CreateMatchScreenState
                       label: "Jornada de Eliminación",
                       value: _selectedKnockoutJournal,
                       items: [null, ..._knockoutJournalOptions],
-                      getLabel: (journal) => journal == null
-                          ? "Sin seleccionar"
-                          : journal,
+                      getLabel: (journal) => journal ?? "Sin seleccionar",
                       onChanged: (value) {
                         setState(() {
                           _selectedKnockoutJournal = value;

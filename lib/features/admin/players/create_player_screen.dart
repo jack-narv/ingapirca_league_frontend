@@ -154,7 +154,7 @@ class _CreatePlayerScreenState
             const SizedBox(height: 16),
 
             DropdownButtonFormField<String>(
-              value: _position,
+              initialValue: _position,
               decoration:
                   const InputDecoration(labelText: "Posición"),
               items: const [

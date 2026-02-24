@@ -5,6 +5,7 @@ import '../admin/referees/referees_list_screen.dart';
 import '../admin/standings/standings_screen.dart';
 import '../admin/teams/teams_list_screen.dart';
 import 'home_screen.dart';
+import 'season_statistics_screen.dart';
 import '../admin/matches/matches_list_screen.dart';
 
 class HomeScreenSeason extends StatelessWidget {
@@ -91,9 +92,19 @@ class HomeScreenSeason extends StatelessWidget {
                       );
                     },
                   ),
-                  const _DashboardCard(
+                  _DashboardCard(
                     title: "Estadisticas",
                     icon: Icons.leaderboard,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => SeasonStatisticsScreen(
+                            season: season,
+                          ),
+                        ),
+                      );
+                    },
                   ),
                   _DashboardCard(
                     title: "Clasificacion",

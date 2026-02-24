@@ -2,13 +2,16 @@ import 'package:flutter/material.dart';
 import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../models/team.dart';
 import '../players/players_list_screen.dart';
+import 'team_statistics_screen.dart';
 
 class TeamDetailScreen extends StatefulWidget {
   final Team team;
+  final String seasonId;
 
   const TeamDetailScreen({
     super.key,
     required this.team,
+    required this.seasonId,
   });
 
   @override
@@ -117,7 +120,17 @@ class _TeamDetailScreenState
           icon: Icons.query_stats_rounded,
           title: "Estadisticas",
           subtitle: "Rendimiento del equipo",
-          onTap: () => _showSoon("Estadisticas"),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => TeamStatisticsScreen(
+                  team: widget.team,
+                  seasonId: widget.seasonId,
+                ),
+              ),
+            );
+          },
         ),
       ],
     );
@@ -143,7 +156,7 @@ class _TeamDetailScreenState
               borderRadius: BorderRadius.circular(18),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.35),
+                  color: Colors.black.withValues(alpha: 0.35),
                   blurRadius: 12,
                   offset: const Offset(0, 8),
                 ),

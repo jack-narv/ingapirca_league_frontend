@@ -241,7 +241,7 @@ class _SeasonsListScreenState extends State<SeasonsListScreen> {
           return ListView(
             children: [
               _buildHeader(),
-              ...seasons.map(_buildSeasonCard).toList(),
+              ...seasons.map(_buildSeasonCard),
               const SizedBox(height: 80),
             ],
           );

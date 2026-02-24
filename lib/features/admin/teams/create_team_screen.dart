@@ -175,7 +175,7 @@ class _CreateTeamScreenState extends State<CreateTeamScreen> {
                       bottom: 20),
                   child:
                       DropdownButtonFormField<SeasonCategory>(
-                    value: _selectedCategory,
+                    initialValue: _selectedCategory,
                     decoration:
                         const InputDecoration(
                       labelText: "Categoria",

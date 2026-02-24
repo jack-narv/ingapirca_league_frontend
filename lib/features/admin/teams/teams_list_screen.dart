@@ -196,7 +196,10 @@ class _TeamsListScreenState extends State<TeamsListScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => TeamDetailScreen(team: team),
+                    builder: (_) => TeamDetailScreen(
+                      team: team,
+                      seasonId: widget.seasonId,
+                    ),
                   ),
                 );
               },
@@ -208,7 +211,7 @@ class _TeamsListScreenState extends State<TeamsListScreen> {
                     color: const Color(0xFF1A2332),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.4),
+                        color: Colors.black.withValues(alpha: 0.4),
                         blurRadius: 12,
                         offset: const Offset(0, 8),
                       ),
