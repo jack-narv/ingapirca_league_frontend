@@ -1,6 +1,6 @@
 {
-    "name": "ingapirca_league_frontend",
-    "short_name": "ingapirca_league_frontend",
+    "name": "NextLiga",
+    "short_name": "NextLiga",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#233F73",
