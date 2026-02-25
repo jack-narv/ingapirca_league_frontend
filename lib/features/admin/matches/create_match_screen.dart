@@ -222,11 +222,12 @@ class _CreateMatchScreenState
         Navigator.pop(context);
       } catch (e) {
         if (!mounted) return;
+        final message = _formatErrorMessage(e);
         ScaffoldMessenger.of(context)
             .showSnackBar(
           SnackBar(
             content: Text(
-              "Partido creado, pero no se pudieron asignar arbitros: $e",
+              "Partido creado, pero no se pudieron asignar arbitros: $message",
             ),
           ),
         );
@@ -234,11 +235,12 @@ class _CreateMatchScreenState
       }
     } catch (e) {
       if (!mounted) return;
+      final message = _formatErrorMessage(e);
       ScaffoldMessenger.of(context)
           .showSnackBar(
         SnackBar(
           content: Text(
-            "Error creando partido: $e",
+            "Error creando partido: $message",
           ),
         ),
       );
@@ -712,5 +714,10 @@ class _CreateMatchScreenState
       return 'JORNADA ${match.group(1)}';
     }
     return normalized;
+  }
+
+  String _formatErrorMessage(Object error) {
+    final text = error.toString().trim();
+    return text.replaceFirst(RegExp(r'^Exception:\s*'), '').trim();
   }
 }

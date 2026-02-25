@@ -33,6 +33,7 @@ class Player {
   final DateTime dateOfBirth;
   final String nationality;
   final String? photoUrl;
+  final String identityCard;
   final List<PlayerTeamInfo> teamInfo;
 
   Player({
@@ -42,6 +43,7 @@ class Player {
     required this.dateOfBirth,
     required this.nationality,
     this.photoUrl,
+    this.identityCard = '',
     this.teamInfo = const [],
   });
 
@@ -82,6 +84,7 @@ class Player {
       nationality:
           (json['nationality'] ?? '').toString(),
       photoUrl: json['photo_url']?.toString(),
+      identityCard: (json['identity_card'] ?? '').toString(),
       teamInfo: teamInfo,
     );
   }

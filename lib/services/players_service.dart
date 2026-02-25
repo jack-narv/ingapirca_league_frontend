@@ -77,6 +77,7 @@ class PlayersService {
     required String lastName,
     required String nationality,
     required DateTime birthDate,
+    required String identityCard,
     String? photoUrl,
   }) async {
     final response = await http.post(
@@ -87,6 +88,7 @@ class PlayersService {
         "last_name": lastName,
         "date_of_birth": EcuadorTime.dateOnlyIso(birthDate),
         "nationality": nationality,
+        "identity_card": identityCard,
         "photo_url": photoUrl,
       }),
     );
@@ -94,9 +96,10 @@ class PlayersService {
     if (response.statusCode == 201 ||
         response.statusCode == 200) {
       return Player.fromJson(jsonDecode(response.body));
-    } else {
-      throw Exception("Error creating player");
     }
+
+    _handleError(response);
+    throw Exception();
   }
 
 

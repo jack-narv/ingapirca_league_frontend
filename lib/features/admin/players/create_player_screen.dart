@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../core/widgets/primary_gradient_button.dart';
@@ -22,6 +23,7 @@ class _CreatePlayerScreenState
   final _firstName = TextEditingController();
   final _lastName = TextEditingController();
   final _nationality = TextEditingController();
+  final _identityCard = TextEditingController();
   final _photoUrl = TextEditingController();
   final _shirtNumber = TextEditingController();
 
@@ -47,14 +49,26 @@ class _CreatePlayerScreenState
   }
 
   Future<void> _create() async {
+    final identityCard = _identityCard.text.trim();
+
     if (_firstName.text.isEmpty ||
         _lastName.text.isEmpty ||
         _nationality.text.isEmpty ||
+        identityCard.isEmpty ||
         _shirtNumber.text.isEmpty ||
         _birthDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Completa todos los campos"),
+        ),
+      );
+      return;
+    }
+
+    if (identityCard.length != 10) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("La cédula debe tener 10 dígitos"),
         ),
       );
       return;
@@ -69,6 +83,7 @@ class _CreatePlayerScreenState
         lastName: _lastName.text.trim(),
         nationality: _nationality.text.trim(),
         birthDate: _birthDate!,
+        identityCard: identityCard,
         photoUrl: _photoUrl.text.trim().isEmpty
             ? null
             : _photoUrl.text.trim(),
@@ -85,9 +100,12 @@ class _CreatePlayerScreenState
       if (!mounted) return;
       Navigator.pop(context);
     } catch (e) {
+      final message = e.toString().replaceFirst('Exception: ', '');
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Error creando jugador"),
+        SnackBar(
+          content: Text(
+            message.isEmpty ? "Error creando jugador" : message,
+          ),
         ),
       );
     } finally {
@@ -100,6 +118,7 @@ class _CreatePlayerScreenState
     _firstName.dispose();
     _lastName.dispose();
     _nationality.dispose();
+    _identityCard.dispose();
     _photoUrl.dispose();
     _shirtNumber.dispose();
     super.dispose();
@@ -133,6 +152,19 @@ class _CreatePlayerScreenState
               controller: _nationality,
               decoration:
                   const InputDecoration(labelText: "Nacionalidad"),
+            ),
+            const SizedBox(height: 16),
+
+            TextField(
+              controller: _identityCard,
+              keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(10),
+              ],
+              decoration: const InputDecoration(
+                labelText: "Cédula de Identidad",
+              ),
             ),
             const SizedBox(height: 16),
 
