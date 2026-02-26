@@ -465,7 +465,7 @@ class _SeasonSanctionsScreenState extends State<SeasonSanctionsScreen> {
                     playerId: s.playerId,
                     playerName: s.fullName.isEmpty ? s.playerId : s.fullName,
                     shirtNumber: s.shirtNumber,
-                    totalMatchesSuspended: s.totalMatchesSuspended,
+                    totalMatchesSuspended: s.pendingMatchesSuspended,
                   ),
                 )
                 .toList();
@@ -488,7 +488,7 @@ class _SeasonSanctionsScreenState extends State<SeasonSanctionsScreen> {
                       icon: Icons.gavel,
                     ),
                     _MetricCard(
-                      label: "Partidos de sancion",
+                      label: "Partidos pendientes",
                       value: "$totalMatchesAffected",
                       icon: Icons.confirmation_number,
                     ),
@@ -507,7 +507,7 @@ class _SeasonSanctionsScreenState extends State<SeasonSanctionsScreen> {
                 else
                   _ModernTableCard(
                     title: "Resumen de suspensiones",
-                    subtitle: "Suma de partidos suspendidos por jugador",
+                    subtitle: "Partidos pendientes por cumplir por jugador",
                     child: _SuspensionsSummaryTable(entries: rows),
                   ),
               ],
@@ -1057,7 +1057,7 @@ class _SuspensionsSummaryTable extends StatelessWidget {
         columns: const [
           DataColumn(label: Text("Jugador")),
           DataColumn(label: Text("Dorsal")),
-          DataColumn(label: Text("Partidos suspendido")),
+          DataColumn(label: Text("Pendientes")),
         ],
         rows: entries.map((entry) {
           return DataRow(
