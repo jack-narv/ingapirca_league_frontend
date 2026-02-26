@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../core/constants/environments.dart';
+import '../models/cards_summary.dart';
 import '../models/suspended_player.dart';
+import '../models/suspension_summary.dart';
 import 'auth_service.dart';
 
 class SanctionsService {
@@ -49,6 +51,64 @@ class SanctionsService {
 
     throw Exception(
       _extractErrorMessage(response, "Error cargando jugadores suspendidos"),
+    );
+  }
+
+  Future<List<SuspensionSummary>> getSuspensionsSummaryBySeason({
+    required String seasonId,
+    String? categoryId,
+    String? teamId,
+  }) async {
+    final query = <String, String>{};
+    if (categoryId != null && categoryId.isNotEmpty) {
+      query['categoryId'] = categoryId;
+    }
+    if (teamId != null && teamId.isNotEmpty) {
+      query['teamId'] = teamId;
+    }
+
+    final uri = Uri.parse(
+      "$baseUrl/sanctions/suspensions-summary/season/$seasonId",
+    ).replace(queryParameters: query.isEmpty ? null : query);
+
+    final response = await http.get(uri);
+
+    if (response.statusCode == 200) {
+      final List data = jsonDecode(response.body);
+      return data.map((e) => SuspensionSummary.fromJson(e)).toList();
+    }
+
+    throw Exception(
+      _extractErrorMessage(response, "Error cargando resumen de suspensiones"),
+    );
+  }
+
+  Future<List<CardsSummary>> getCardsSummaryBySeason({
+    required String seasonId,
+    String? categoryId,
+    String? teamId,
+  }) async {
+    final query = <String, String>{};
+    if (categoryId != null && categoryId.isNotEmpty) {
+      query['categoryId'] = categoryId;
+    }
+    if (teamId != null && teamId.isNotEmpty) {
+      query['teamId'] = teamId;
+    }
+
+    final uri = Uri.parse(
+      "$baseUrl/sanctions/cards-summary/season/$seasonId",
+    ).replace(queryParameters: query.isEmpty ? null : query);
+
+    final response = await http.get(uri);
+
+    if (response.statusCode == 200) {
+      final List data = jsonDecode(response.body);
+      return data.map((e) => CardsSummary.fromJson(e)).toList();
+    }
+
+    throw Exception(
+      _extractErrorMessage(response, "Error cargando resumen de tarjetas"),
     );
   }
 }

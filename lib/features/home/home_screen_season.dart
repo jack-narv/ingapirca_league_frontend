@@ -7,6 +7,7 @@ import '../admin/teams/teams_list_screen.dart';
 import '../admin/venues/venues_list_screen.dart';
 import 'home_screen.dart';
 import '../admin/seasons/season_statistics_screen.dart';
+import '../admin/seasons/season_sanctions_screen.dart';
 import '../admin/matches/matches_list_screen.dart';
 
 class HomeScreenSeason extends StatelessWidget {
@@ -101,6 +102,20 @@ class HomeScreenSeason extends StatelessWidget {
                         context,
                         MaterialPageRoute(
                           builder: (_) => SeasonStatisticsScreen(
+                            season: season,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  _DashboardCard(
+                    title: "Sanciones",
+                    icon: Icons.gavel,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => SeasonSanctionsScreen(
                             season: season,
                           ),
                         ),
