@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../core/constants/environments.dart';
-import '../models/match_lineup.dart';
+import '../models/suspended_player.dart';
 import 'auth_service.dart';
 
-class MatchLineupsService {
+class SanctionsService {
   static const String baseUrl = Environment.baseUrl;
   final AuthService _authService = AuthService();
 
@@ -24,7 +24,6 @@ class MatchLineupsService {
         if (message is String && message.trim().isNotEmpty) {
           return message.trim();
         }
-
         if (message is List && message.isNotEmpty) {
           return message.map((e) => e.toString()).join(', ');
         }
@@ -34,41 +33,22 @@ class MatchLineupsService {
     return fallback;
   }
 
-  Future<List<MatchLineupPlayer>> getLineup(
-    String matchId,
-    String teamId,
-  ) async {
+  Future<List<SuspendedPlayer>> getSuspendedPlayers({
+    required String matchId,
+    required String teamId,
+  }) async {
     final response = await http.get(
-      Uri.parse("$baseUrl/match-lineups/$matchId/team/$teamId"),
+      Uri.parse("$baseUrl/sanctions/suspended-players/$matchId/team/$teamId"),
+      headers: await _headers(),
     );
 
     if (response.statusCode == 200) {
       final List data = jsonDecode(response.body);
-      return data.map((e) => MatchLineupPlayer.fromJson(e)).toList();
+      return data.map((e) => SuspendedPlayer.fromJson(e)).toList();
     }
 
-    throw Exception("Error cargando la alineacion");
-  }
-
-  Future<void> submitLineup({
-    required String matchId,
-    required String teamId,
-    required List<MatchLineupPlayer> players,
-  }) async {
-    final response = await http.post(
-      Uri.parse("$baseUrl/match-lineups"),
-      headers: await _headers(),
-      body: jsonEncode({
-        "match_id": matchId,
-        "team_id": teamId,
-        "players": players.map((e) => e.toSubmitJson()).toList(),
-      }),
+    throw Exception(
+      _extractErrorMessage(response, "Error cargando jugadores suspendidos"),
     );
-
-    if (response.statusCode != 200 && response.statusCode != 201) {
-      throw Exception(
-        _extractErrorMessage(response, "Error subiendo la alineacion"),
-      );
-    }
   }
 }

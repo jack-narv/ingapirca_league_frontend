@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../core/widgets/primary_gradient_button.dart';
 import '../../../models/match_lineup.dart';
+import '../../../models/suspended_player.dart';
 import '../../../models/team_player.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/match_lineups_service.dart';
 import '../../../services/players_service.dart';
+import '../../../services/sanctions_service.dart';
 
 class MatchLineupScreen extends StatefulWidget {
   final String matchId;
@@ -26,12 +28,15 @@ class MatchLineupScreen extends StatefulWidget {
 class _MatchLineupScreenState extends State<MatchLineupScreen> {
   final MatchLineupsService _service = MatchLineupsService();
   final PlayersService _playersService = PlayersService();
+  final SanctionsService _sanctionsService = SanctionsService();
 
   late Future<List<MatchLineupPlayer>> _future;
 
   List<MatchLineupPlayer> _players = [];
+  Map<String, SuspendedPlayer> _suspendedByPlayerId = {};
 
   bool _loading = false;
+  bool _loadingSuspensions = false;
   bool _canEdit = false;
   bool _isAdmin = false;
   bool _initialized = false;
@@ -41,6 +46,39 @@ class _MatchLineupScreenState extends State<MatchLineupScreen> {
     super.initState();
     _future = _service.getLineup(widget.matchId, widget.teamId);
     _checkRole();
+    _loadSuspendedPlayers();
+  }
+
+  Future<void> _loadSuspendedPlayers() async {
+    setState(() => _loadingSuspensions = true);
+
+    try {
+      final suspended = await _sanctionsService.getSuspendedPlayers(
+        matchId: widget.matchId,
+        teamId: widget.teamId,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _suspendedByPlayerId = {
+          for (final player in suspended) player.playerId: player,
+        };
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _suspendedByPlayerId = {});
+    } finally {
+      if (mounted) {
+        setState(() => _loadingSuspensions = false);
+      }
+    }
+  }
+
+  List<MatchLineupPlayer> _blockedPlayersInLineup() {
+    return _players
+        .where((p) => _suspendedByPlayerId.containsKey(p.playerId))
+        .toList();
   }
 
   void _checkRole() async {
@@ -89,6 +127,28 @@ class _MatchLineupScreenState extends State<MatchLineupScreen> {
       return;
     }
 
+    if (_loadingSuspensions) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Espera mientras validamos suspendidos'),
+        ),
+      );
+      return;
+    }
+
+    final blockedPlayers = _blockedPlayersInLineup();
+    if (blockedPlayers.isNotEmpty) {
+      final blockedNames = blockedPlayers.map((p) => p.playerName).join(', ');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Hay jugadores suspendidos en la alineacion: $blockedNames',
+          ),
+        ),
+      );
+      return;
+    }
+
     setState(() => _loading = true);
 
     try {
@@ -105,10 +165,14 @@ class _MatchLineupScreenState extends State<MatchLineupScreen> {
           content: Text('Alineacion enviada'),
         ),
       );
-    } catch (_) {
+    } catch (e) {
+      final raw = e.toString();
+      final message = raw.startsWith('Exception: ')
+          ? raw.replaceFirst('Exception: ', '')
+          : raw;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Error enviando alineacion'),
+        SnackBar(
+          content: Text(message),
         ),
       );
     } finally {
@@ -135,6 +199,7 @@ class _MatchLineupScreenState extends State<MatchLineupScreen> {
       builder: (_) => _BuildLineupDialog(
         teamName: widget.teamName,
         roster: roster,
+        suspendedByPlayerId: _suspendedByPlayerId,
       ),
     );
 
@@ -181,6 +246,7 @@ class _MatchLineupScreenState extends State<MatchLineupScreen> {
                           widget.teamId,
                         );
                       });
+                      _loadSuspendedPlayers();
                     },
                     child: const Text('Reintentar'),
                   ),
@@ -285,12 +351,27 @@ class _MatchLineupScreenState extends State<MatchLineupScreen> {
               color: Colors.white70,
             ),
           ),
+          const SizedBox(height: 8),
+          Text(
+            _loadingSuspensions
+                ? 'Validando suspendidos...'
+                : 'Suspendidos: ${_suspendedByPlayerId.length}',
+            style: const TextStyle(
+              color: Colors.white60,
+              fontSize: 12,
+            ),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildPlayerCard(int index, MatchLineupPlayer player) {
+    final suspended = _suspendedByPlayerId[player.playerId];
+    final suspensionLabel = suspended == null
+        ? null
+        : '${suspended.pendingMatches} partido(s) pendiente(s)';
+
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(18),
@@ -318,19 +399,55 @@ class _MatchLineupScreenState extends State<MatchLineupScreen> {
           ),
           const SizedBox(width: 16),
           Expanded(
-            child: Text(
-              player.playerName,
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  player.playerName,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (suspensionLabel != null)
+                  Text(
+                    'Suspendido: $suspensionLabel',
+                    style: const TextStyle(
+                      color: Colors.redAccent,
+                      fontSize: 12,
+                    ),
+                  ),
+              ],
             ),
           ),
+          if (suspended != null) ...[
+            Container(
+              margin: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 4,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.red.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Text(
+                'SUSP',
+                style: TextStyle(
+                  color: Colors.redAccent,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 11,
+                ),
+              ),
+            ),
+          ],
           _positionBadge(player.position),
           const SizedBox(width: 12),
           if (_canEdit)
             Switch(
               value: player.isStarting,
-              onChanged: (_) => _toggleStarting(index),
+              onChanged: suspended == null
+                  ? (_) => _toggleStarting(index)
+                  : null,
               activeThumbColor:
                   Theme.of(context).colorScheme.primary,
             ),
@@ -379,10 +496,12 @@ class _MatchLineupScreenState extends State<MatchLineupScreen> {
 class _BuildLineupDialog extends StatefulWidget {
   final String teamName;
   final List<TeamPlayer> roster;
+  final Map<String, SuspendedPlayer> suspendedByPlayerId;
 
   const _BuildLineupDialog({
     required this.teamName,
     required this.roster,
+    required this.suspendedByPlayerId,
   });
 
   @override
@@ -394,6 +513,22 @@ class _BuildLineupDialogState extends State<_BuildLineupDialog> {
   final Set<String> _startingPlayerIds = {};
 
   void _toggleSelected(TeamPlayer player, bool selected) {
+    final isSuspended =
+        widget.suspendedByPlayerId.containsKey(player.playerId);
+    if (selected && isSuspended) {
+      final suspended = widget.suspendedByPlayerId[player.playerId]!;
+      final fullName =
+          '${player.player.firstName} ${player.player.lastName}';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '$fullName esta suspendido (${suspended.pendingMatches} partido(s) pendiente(s))',
+          ),
+        ),
+      );
+      return;
+    }
+
     setState(() {
       if (selected) {
         _selectedPlayerIds.add(player.playerId);
@@ -405,6 +540,21 @@ class _BuildLineupDialogState extends State<_BuildLineupDialog> {
   }
 
   void _toggleStarting(TeamPlayer player, bool isStarting) {
+    if (isStarting &&
+        widget.suspendedByPlayerId.containsKey(player.playerId)) {
+      final suspended = widget.suspendedByPlayerId[player.playerId]!;
+      final fullName =
+          '${player.player.firstName} ${player.player.lastName}';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '$fullName esta suspendido (${suspended.pendingMatches} partido(s) pendiente(s))',
+          ),
+        ),
+      );
+      return;
+    }
+
     setState(() {
       if (isStarting && !_startingPlayerIds.contains(player.playerId) &&
           _startingPlayerIds.length >= 11) {
@@ -427,7 +577,11 @@ class _BuildLineupDialogState extends State<_BuildLineupDialog> {
 
   void _confirm() {
     final selectedPlayers = widget.roster
-        .where((p) => _selectedPlayerIds.contains(p.playerId))
+        .where(
+          (p) =>
+              _selectedPlayerIds.contains(p.playerId) &&
+              !widget.suspendedByPlayerId.containsKey(p.playerId),
+        )
         .map(
           (p) => MatchLineupPlayer(
             playerId: p.playerId,
@@ -465,6 +619,9 @@ class _BuildLineupDialogState extends State<_BuildLineupDialog> {
             final player = widget.roster[index];
             final selected = _selectedPlayerIds.contains(player.playerId);
             final starting = _startingPlayerIds.contains(player.playerId);
+            final suspended =
+                widget.suspendedByPlayerId[player.playerId];
+            final isSuspended = suspended != null;
 
             return Container(
               margin: const EdgeInsets.only(bottom: 8),
@@ -477,7 +634,9 @@ class _BuildLineupDialogState extends State<_BuildLineupDialog> {
                 children: [
                   Checkbox(
                     value: selected,
-                    onChanged: (v) => _toggleSelected(player, v ?? false),
+                    onChanged: isSuspended
+                        ? null
+                        : (v) => _toggleSelected(player, v ?? false),
                   ),
                   Expanded(
                     child: Column(
@@ -495,12 +654,20 @@ class _BuildLineupDialogState extends State<_BuildLineupDialog> {
                             fontSize: 12,
                           ),
                         ),
+                        if (isSuspended)
+                          Text(
+                            'Suspendido: ${suspended.pendingMatches} partido(s)',
+                            style: const TextStyle(
+                              color: Colors.redAccent,
+                              fontSize: 11,
+                            ),
+                          ),
                       ],
                     ),
                   ),
                   Switch(
                     value: starting,
-                    onChanged: selected
+                    onChanged: selected && !isSuspended
                         ? (v) => _toggleStarting(player, v)
                         : null,
                   ),
