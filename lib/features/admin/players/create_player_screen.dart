@@ -1,16 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import '../../../core/navigation/season_bottom_nav.dart';
 import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../core/widgets/primary_gradient_button.dart';
 import '../../../services/players_service.dart';
 
 class CreatePlayerScreen extends StatefulWidget {
   final String teamId;
+  final String seasonId;
+  final String seasonName;
 
   const CreatePlayerScreen({
     super.key,
     required this.teamId,
+    required this.seasonId,
+    required this.seasonName,
   });
 
   @override
@@ -128,8 +133,15 @@ class _CreatePlayerScreenState
   Widget build(BuildContext context) {
     return AppScaffoldWithNav(
       title: "Crear Jugador",
-      currentIndex: 0,
-      onNavTap: (_) {},
+      currentIndex: 2,
+      navItems: seasonNavItems,
+      onNavTap: (index) => handleSeasonNavTap(
+        context,
+        tappedIndex: index,
+        currentIndex: 2,
+        seasonId: widget.seasonId,
+        seasonName: widget.seasonName,
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(

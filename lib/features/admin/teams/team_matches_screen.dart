@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/navigation/season_bottom_nav.dart';
 import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../models/match.dart';
 import '../../../models/team.dart';
@@ -11,11 +12,13 @@ import '../matches/match_detail_screen.dart';
 class TeamMatchesScreen extends StatefulWidget {
   final Team team;
   final String seasonId;
+  final String seasonName;
 
   const TeamMatchesScreen({
     super.key,
     required this.team,
     required this.seasonId,
+    required this.seasonName,
   });
 
   @override
@@ -117,8 +120,15 @@ class _TeamMatchesScreenState
   Widget build(BuildContext context) {
     return AppScaffoldWithNav(
       title: "Partidos - ${widget.team.name}",
-      currentIndex: 0,
-      onNavTap: (_) {},
+      currentIndex: 2,
+      navItems: seasonNavItems,
+      onNavTap: (index) => handleSeasonNavTap(
+        context,
+        tappedIndex: index,
+        currentIndex: 2,
+        seasonId: widget.seasonId,
+        seasonName: widget.seasonName,
+      ),
       body: FutureBuilder<List<Match>>(
         future: _future,
         builder: (context, snapshot) {
@@ -203,7 +213,10 @@ class _TeamMatchesScreenState
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => MatchDetailScreen(match: match),
+            builder: (_) => MatchDetailScreen(
+              match: match,
+              seasonName: widget.seasonName,
+            ),
           ),
         ).then((_) => _refresh());
       },

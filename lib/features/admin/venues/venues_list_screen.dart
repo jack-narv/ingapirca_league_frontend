@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/navigation/season_bottom_nav.dart';
 import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../models/venue.dart';
 import '../../../services/venues_service.dart';
@@ -43,7 +44,14 @@ class _VenuesListScreenState
     return AppScaffoldWithNav(
       title: "Escenarios - ${widget.seasonName}",
       currentIndex: 0,
-      onNavTap: (_) {},
+      navItems: seasonNavItems,
+      onNavTap: (index) => handleSeasonNavTap(
+        context,
+        tappedIndex: index,
+        currentIndex: 0,
+        seasonId: widget.seasonId,
+        seasonName: widget.seasonName,
+      ),
       floatingActionButton: FutureBuilder<bool>(
         future: AuthService().isAdmin(),
         builder: (context, snapshot) {
@@ -59,6 +67,7 @@ class _VenuesListScreenState
                   builder: (_) =>
                       CreateVenueScreen(
                         seasonId: widget.seasonId,
+                        seasonName: widget.seasonName,
                       ),
                 ),
               );

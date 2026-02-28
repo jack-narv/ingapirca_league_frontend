@@ -1,5 +1,6 @@
 ﻿import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../../core/navigation/season_bottom_nav.dart';
 import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../models/match.dart';
 import '../../../models/match_event.dart';
@@ -26,10 +27,12 @@ import 'match_live_screen.dart';
 
 class MatchDetailScreen extends StatefulWidget {
   final Match match;
+  final String seasonName;
 
   const MatchDetailScreen({
     super.key,
     required this.match,
+    required this.seasonName,
   });
 
   @override
@@ -458,8 +461,15 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
       length: 3,
       child: AppScaffoldWithNav(
         title: 'Detalle Partido',
-        currentIndex: 0,
-        onNavTap: (_) {},
+        currentIndex: 1,
+        navItems: seasonNavItems,
+        onNavTap: (index) => handleSeasonNavTap(
+          context,
+          tappedIndex: index,
+          currentIndex: 1,
+          seasonId: _match.seasonId,
+          seasonName: widget.seasonName,
+        ),
         body: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
@@ -665,6 +675,8 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
                     MaterialPageRoute(
                       builder: (_) => LiveMatchScreen(
                         matchId: _match.id,
+                        seasonId: _match.seasonId,
+                        seasonName: widget.seasonName,
                       ),
                     ),
                   );

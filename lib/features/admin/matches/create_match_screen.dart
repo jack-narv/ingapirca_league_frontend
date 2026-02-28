@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../../core/navigation/season_bottom_nav.dart';
 import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../core/widgets/primary_gradient_button.dart';
 import '../../../models/referees.dart';
@@ -14,10 +15,12 @@ import '../../../services/matches_service.dart';
 
 class CreateMatchScreen extends StatefulWidget {
   final String seasonId;
+  final String seasonName;
 
   const CreateMatchScreen({
     super.key,
     required this.seasonId,
+    required this.seasonName,
   });
 
   @override
@@ -355,8 +358,15 @@ class _CreateMatchScreenState
   Widget build(BuildContext context) {
     return AppScaffoldWithNav(
       title: "Crear Partido",
-      currentIndex: 0,
-      onNavTap: (_) {},
+      currentIndex: 1,
+      navItems: seasonNavItems,
+      onNavTap: (index) => handleSeasonNavTap(
+        context,
+        tappedIndex: index,
+        currentIndex: 1,
+        seasonId: widget.seasonId,
+        seasonName: widget.seasonName,
+      ),
       body: SingleChildScrollView(
         padding:
             const EdgeInsets.all(24),

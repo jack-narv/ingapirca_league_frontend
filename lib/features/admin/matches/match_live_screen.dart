@@ -1,5 +1,6 @@
 ﻿import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../../core/navigation/season_bottom_nav.dart';
 import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../models/match.dart';
 import '../../../models/match_event.dart';
@@ -15,10 +16,14 @@ import 'add_match_event_dialog.dart';
 
 class LiveMatchScreen extends StatefulWidget {
   final String matchId;
+  final String seasonId;
+  final String seasonName;
 
   const LiveMatchScreen({
     super.key,
     required this.matchId,
+    required this.seasonId,
+    required this.seasonName,
   });
 
   @override
@@ -243,8 +248,15 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
   Widget build(BuildContext context) {
     return AppScaffoldWithNav(
       title: 'En Vivo',
-      currentIndex: 0,
-      onNavTap: (_) {},
+      currentIndex: 1,
+      navItems: seasonNavItems,
+      onNavTap: (index) => handleSeasonNavTap(
+        context,
+        tappedIndex: index,
+        currentIndex: 1,
+        seasonId: widget.seasonId,
+        seasonName: widget.seasonName,
+      ),
       floatingActionButton: _canAddEvents
           ? FloatingActionButton(
               onPressed: _addEvent,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/navigation/season_bottom_nav.dart';
 import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../models/team.dart';
 import '../../../services/players_service.dart';
@@ -10,10 +11,12 @@ import '../../../models/team_player.dart';
 class PlayersListScreen extends StatefulWidget {
   final Team team;
   final String seasonId;
+  final String seasonName;
   const PlayersListScreen({
       super.key,
       required this.team,
       required this.seasonId,
+      required this.seasonName,
     });
 
   @override
@@ -40,8 +43,15 @@ class _PlayersListScreenState extends State<PlayersListScreen> {
   Widget build(BuildContext context) {
     return AppScaffoldWithNav(
       title: "Jugadores - ${widget.team.name}",
-      currentIndex: 0,
-      onNavTap: (_) {},
+      currentIndex: 2,
+      navItems: seasonNavItems,
+      onNavTap: (index) => handleSeasonNavTap(
+        context,
+        tappedIndex: index,
+        currentIndex: 2,
+        seasonId: widget.seasonId,
+        seasonName: widget.seasonName,
+      ),
       floatingActionButton: FutureBuilder<bool>(
         future: AuthService().isAdmin(),
         builder: (context, snapshot) {
@@ -56,6 +66,8 @@ class _PlayersListScreenState extends State<PlayersListScreen> {
                 MaterialPageRoute(
                   builder: (_) => CreatePlayerScreen(
                     teamId: widget.team.id,
+                    seasonId: widget.seasonId,
+                    seasonName: widget.seasonName,
                   ),
                 ),
               );
@@ -115,6 +127,7 @@ class _PlayersListScreenState extends State<PlayersListScreen> {
                             PlayerDetailScreen(
                               playerId: playerId,
                               seasonId: widget.seasonId,
+                              seasonName: widget.seasonName,
                               teamId: widget.team.id,
                             ),
                       ),

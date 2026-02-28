@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/navigation/season_bottom_nav.dart';
 import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../models/season_category.dart';
 import '../../../services/matches_service.dart';
@@ -142,8 +143,15 @@ class _MatchesListScreenState
     Widget build(BuildContext context) {
       return AppScaffoldWithNav(
         title: "Partidos - ${widget.seasonName}",
-        currentIndex: 0,
-        onNavTap: (_) {},
+        currentIndex: 1,
+        navItems: seasonNavItems,
+        onNavTap: (index) => handleSeasonNavTap(
+          context,
+          tappedIndex: index,
+          currentIndex: 1,
+          seasonId: widget.seasonId,
+          seasonName: widget.seasonName,
+        ),
         floatingActionButton: FutureBuilder<bool>(
           future: AuthService().isAdmin(),
           builder: (context, snapshot) {
@@ -159,6 +167,7 @@ class _MatchesListScreenState
                     builder: (_) =>
                         CreateMatchScreen(
                           seasonId: widget.seasonId,
+                          seasonName: widget.seasonName,
                         ),
                   ),
                 );
@@ -299,7 +308,10 @@ class _MatchesListScreenState
             context,
             MaterialPageRoute(
               builder: (_) =>
-                  MatchDetailScreen(match: match),
+                  MatchDetailScreen(
+                    match: match,
+                    seasonName: widget.seasonName,
+                  ),
             ),
           ).then((_) => _refresh());
         },

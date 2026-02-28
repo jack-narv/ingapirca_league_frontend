@@ -3,11 +3,23 @@ import '../../features/auth/login_screen.dart';
 import '../../services/auth_service.dart';
 
 class AppScaffoldWithNav extends StatelessWidget {
+  static const List<BottomNavigationBarItem> defaultNavItems = [
+    BottomNavigationBarItem(
+      icon: Icon(Icons.dashboard),
+      label: "Inicio",
+    ),
+    BottomNavigationBarItem(
+      icon: Icon(Icons.person),
+      label: "Perfil",
+    ),
+  ];
+
   final String title;
   final Widget body;
   final int currentIndex;
   final ValueChanged<int> onNavTap;
   final Widget? floatingActionButton;
+  final List<BottomNavigationBarItem> navItems;
 
   const AppScaffoldWithNav({
     super.key,
@@ -16,6 +28,7 @@ class AppScaffoldWithNav extends StatelessWidget {
     required this.currentIndex,
     required this.onNavTap,
     this.floatingActionButton,
+    this.navItems = defaultNavItems,
   });
 
   void _logout(BuildContext rootContext) {
@@ -56,6 +69,8 @@ class AppScaffoldWithNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final safeIndex = currentIndex.clamp(0, navItems.length - 1);
+
     return Scaffold(
       appBar: AppBar(
         title: Text(title),
@@ -79,18 +94,9 @@ class AppScaffoldWithNav extends StatelessWidget {
           backgroundColor: const Color(0xFF0F172A),
           selectedItemColor: Theme.of(context).colorScheme.primary,
           unselectedItemColor: Colors.white54,
-          currentIndex: currentIndex,
+          currentIndex: safeIndex,
           onTap: onNavTap,
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.dashboard),
-              label: "Inicio",
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person),
-              label: "Perfil",
-            ),
-          ],
+          items: navItems,
         ),
       ),
     );

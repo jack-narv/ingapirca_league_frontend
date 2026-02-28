@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
+import '../../../core/navigation/season_bottom_nav.dart';
 import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../core/widgets/primary_gradient_button.dart';
 import '../../../services/referees_service.dart';
 
 class CreateRefereeScreen extends StatefulWidget {
   final String seasonId;
+  final String seasonName;
 
   const CreateRefereeScreen({
     super.key,
     required this.seasonId,
+    required this.seasonName,
   });
 
   @override
@@ -79,7 +82,14 @@ class _CreateRefereeScreenState extends State<CreateRefereeScreen> {
     return AppScaffoldWithNav(
       title: "Crear Arbitro",
       currentIndex: 0,
-      onNavTap: (_) {},
+      navItems: seasonNavItems,
+      onNavTap: (index) => handleSeasonNavTap(
+        context,
+        tappedIndex: index,
+        currentIndex: 0,
+        seasonId: widget.seasonId,
+        seasonName: widget.seasonName,
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(

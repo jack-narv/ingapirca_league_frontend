@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
+import '../../../core/navigation/season_bottom_nav.dart';
 import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../models/season_category.dart';
 import '../../../models/standings.dart';
 import '../../../services/seasons_service.dart';
 import '../../../services/standings_service.dart';
-import '../../home/home_screen.dart';
 
 class StandingsScreen extends StatefulWidget {
   final String seasonId;
@@ -42,23 +42,6 @@ class _StandingsScreenState extends State<StandingsScreen> {
   void dispose() {
     _scrollController.dispose();
     super.dispose();
-  }
-
-  void _handleBottomNavTap(int index) {
-    if (index == 0) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-        (route) => false,
-      );
-      return;
-    }
-
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const HomeScreen(initialIndex: 1)),
-      (route) => false,
-    );
   }
 
   void _applyCategory(String? categoryId) {
@@ -200,8 +183,15 @@ class _StandingsScreenState extends State<StandingsScreen> {
   Widget build(BuildContext context) {
     return AppScaffoldWithNav(
       title: "Clasificacion - ${widget.seasonName}",
-      currentIndex: 0,
-      onNavTap: _handleBottomNavTap,
+      currentIndex: 3,
+      navItems: seasonNavItems,
+      onNavTap: (index) => handleSeasonNavTap(
+        context,
+        tappedIndex: index,
+        currentIndex: 3,
+        seasonId: widget.seasonId,
+        seasonName: widget.seasonName,
+      ),
       body: FutureBuilder<List<Standing>>(
         future: _standingsFuture,
         builder: (context, standingsSnapshot) {

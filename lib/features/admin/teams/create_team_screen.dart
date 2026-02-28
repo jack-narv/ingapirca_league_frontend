@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
+import '../../../core/navigation/season_bottom_nav.dart';
 import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../core/widgets/primary_gradient_button.dart';
 import '../../../models/season_category.dart';
 import '../../../services/seasons_service.dart';
 import '../../../services/teams_service.dart';
-import '../../home/home_screen.dart';
 
 class CreateTeamScreen extends StatefulWidget {
   final String seasonId;
+  final String seasonName;
 
   const CreateTeamScreen({
     super.key,
     required this.seasonId,
+    required this.seasonName,
   });
 
   @override
@@ -37,23 +39,6 @@ class _CreateTeamScreenState extends State<CreateTeamScreen> {
     _categoriesFuture =
         _seasonsService.getCategoriesBySeason(
       widget.seasonId,
-    );
-  }
-
-  void _handleBottomNavTap(int index) {
-    if (index == 0) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-        (route) => false,
-      );
-      return;
-    }
-
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const HomeScreen(initialIndex: 1)),
-      (route) => false,
     );
   }
 
@@ -134,8 +119,15 @@ class _CreateTeamScreenState extends State<CreateTeamScreen> {
   Widget build(BuildContext context) {
     return AppScaffoldWithNav(
       title: "Crear Equipo",
-      currentIndex: 0,
-      onNavTap: _handleBottomNavTap,
+      currentIndex: 2,
+      navItems: seasonNavItems,
+      onNavTap: (index) => handleSeasonNavTap(
+        context,
+        tappedIndex: index,
+        currentIndex: 2,
+        seasonId: widget.seasonId,
+        seasonName: widget.seasonName,
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 30),
         child: Column(

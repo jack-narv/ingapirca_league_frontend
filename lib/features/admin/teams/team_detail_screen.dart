@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/navigation/season_bottom_nav.dart';
 import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../models/team.dart';
 import '../players/players_list_screen.dart';
@@ -8,11 +9,13 @@ import 'team_statistics_screen.dart';
 class TeamDetailScreen extends StatefulWidget {
   final Team team;
   final String seasonId;
+  final String seasonName;
 
   const TeamDetailScreen({
     super.key,
     required this.team,
     required this.seasonId,
+    required this.seasonName,
   });
 
   @override
@@ -22,17 +25,14 @@ class TeamDetailScreen extends StatefulWidget {
 
 class _TeamDetailScreenState
     extends State<TeamDetailScreen> {
-  int _navIndex = 0;
-
   void _onNavTap(int index) {
-    setState(() {
-      _navIndex = index;
-    });
-
-    // Example navigation
-    if (index == 0) {
-      Navigator.pop(context);
-    }
+    handleSeasonNavTap(
+      context,
+      tappedIndex: index,
+      currentIndex: 2,
+      seasonId: widget.seasonId,
+      seasonName: widget.seasonName,
+    );
   }
 
   Widget _buildBody() {
@@ -109,6 +109,7 @@ class _TeamDetailScreenState
                     PlayersListScreen(
                       team: widget.team,
                       seasonId: widget.seasonId,
+                      seasonName: widget.seasonName,
                     ),
               ),
             );
@@ -125,6 +126,7 @@ class _TeamDetailScreenState
                 builder: (_) => TeamMatchesScreen(
                   team: widget.team,
                   seasonId: widget.seasonId,
+                  seasonName: widget.seasonName,
                 ),
               ),
             );
@@ -141,6 +143,7 @@ class _TeamDetailScreenState
                 builder: (_) => TeamStatisticsScreen(
                   team: widget.team,
                   seasonId: widget.seasonId,
+                  seasonName: widget.seasonName,
                 ),
               ),
             );
@@ -236,7 +239,8 @@ class _TeamDetailScreenState
   Widget build(BuildContext context) {
     return AppScaffoldWithNav(
       title: widget.team.name,
-      currentIndex: _navIndex,
+      currentIndex: 2,
+      navItems: seasonNavItems,
       onNavTap: _onNavTap,
       body: _buildBody(),
     );
