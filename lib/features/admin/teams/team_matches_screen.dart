@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../models/match.dart';
 import '../../../models/team.dart';
+import '../../../models/venue.dart';
 import '../../../services/matches_service.dart';
 import '../../../services/teams_service.dart';
+import '../../../services/venues_service.dart';
 import '../matches/match_detail_screen.dart';
 
 class TeamMatchesScreen extends StatefulWidget {
@@ -25,13 +27,16 @@ class _TeamMatchesScreenState
     extends State<TeamMatchesScreen> {
   final MatchesService _matchesService = MatchesService();
   final TeamsService _teamsService = TeamsService();
+  final VenuesService _venuesService = VenuesService();
   final ScrollController _scrollController = ScrollController(
     keepScrollOffset: false,
   );
 
   late Future<List<Match>> _future;
   late Future<List<Team>> _teamsFuture;
+  late Future<List<Venue>> _venuesFuture;
   Map<String, Team> _teamsById = {};
+  Map<String, Venue> _venuesById = {};
   String? _selectedJournal;
   bool _didAutoSelectJournal = false;
 
@@ -43,7 +48,11 @@ class _TeamMatchesScreenState
       widget.seasonId,
       categoryId: widget.team.categoryId,
     );
+    _venuesFuture = _venuesService.getBySeason(
+      widget.seasonId,
+    );
     _loadTeams();
+    _loadVenues();
   }
 
   @override
@@ -75,6 +84,14 @@ class _TeamMatchesScreenState
     });
   }
 
+  Future<void> _loadVenues() async {
+    final venues = await _venuesFuture;
+    if (!mounted) return;
+    setState(() {
+      _venuesById = {for (final venue in venues) venue.id: venue};
+    });
+  }
+
   void _scrollToTop() {
     if (!_scrollController.hasClients) return;
     _scrollController.jumpTo(0);
@@ -87,9 +104,13 @@ class _TeamMatchesScreenState
         widget.seasonId,
         categoryId: widget.team.categoryId,
       );
+      _venuesFuture = _venuesService.getBySeason(
+        widget.seasonId,
+      );
     });
     _scrollToTop();
     _loadTeams();
+    _loadVenues();
   }
 
   @override
@@ -247,12 +268,15 @@ class _TeamMatchesScreenState
                   color: Colors.white54,
                 ),
                 const SizedBox(width: 6),
-                Text(
-                  "${match.matchDate.day}/${match.matchDate.month}/${match.matchDate.year} "
-                  "${match.matchDate.hour}:${match.matchDate.minute.toString().padLeft(2, '0')}",
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12,
+                Expanded(
+                  child: Text(
+                    "${_weekdayEs(match.matchDate)} ${_formatDateTime(match.matchDate)} • ${_venueName(match.venueId)}",
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 11,
+                    ),
                   ),
                 ),
               ],
@@ -493,6 +517,41 @@ class _TeamMatchesScreenState
 
   DateTime _ecuadorNow() {
     return DateTime.now().toUtc().subtract(const Duration(hours: 5));
+  }
+
+  String _formatDateTime(DateTime date) {
+    final hour = date.hour.toString().padLeft(2, '0');
+    final minute = date.minute.toString().padLeft(2, '0');
+    return "${date.day}/${date.month}/${date.year} $hour:$minute";
+  }
+
+  String _weekdayEs(DateTime date) {
+    switch (date.weekday) {
+      case DateTime.monday:
+        return 'Lunes';
+      case DateTime.tuesday:
+        return 'Martes';
+      case DateTime.wednesday:
+        return 'Miércoles';
+      case DateTime.thursday:
+        return 'Jueves';
+      case DateTime.friday:
+        return 'Viernes';
+      case DateTime.saturday:
+        return 'Sábado';
+      case DateTime.sunday:
+        return 'Domingo';
+      default:
+        return '';
+    }
+  }
+
+  String _venueName(String venueId) {
+    final name = _venuesById[venueId]?.name ?? '';
+    if (name.trim().isEmpty) {
+      return 'Escenario no definido';
+    }
+    return name;
   }
 
   Widget _teamInfo({

@@ -9,6 +9,7 @@ import '../../../models/match_referee_observation.dart';
 import '../../../models/referee_ratings.dart';
 import '../../../models/referees.dart';
 import '../../../models/team.dart';
+import '../../../models/venue.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/live_match_service.dart';
 import '../../../services/match_events_service.dart';
@@ -18,6 +19,7 @@ import '../../../services/matches_service.dart';
 import '../../../services/referee_ratings_service.dart';
 import '../../../services/referees_service.dart';
 import '../../../services/teams_service.dart';
+import '../../../services/venues_service.dart';
 import 'finalize_match_screen.dart';
 import 'match_lineup_screen.dart';
 import 'match_live_screen.dart';
@@ -37,6 +39,7 @@ class MatchDetailScreen extends StatefulWidget {
 class _MatchDetailScreenState extends State<MatchDetailScreen> {
   final MatchesService _service = MatchesService();
   final TeamsService _teamsService = TeamsService();
+  final VenuesService _venuesService = VenuesService();
   final MatchEventsService _eventsService = MatchEventsService();
   final MatchLineupsService _lineupsService = MatchLineupsService();
   final RefereesService _refereesService = RefereesService();
@@ -50,6 +53,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
 
   late Match _match;
   Map<String, Team> _teamsById = {};
+  Map<String, Venue> _venuesById = {};
 
   late Future<bool> _isAdminFuture;
   late Future<List<MatchLineupPlayer>> _homeLineupFuture;
@@ -106,6 +110,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
 
   Future<void> _loadAll() async {
     await _loadTeams();
+    await _loadVenues();
     await _loadLineupCaches();
     await _loadEvents();
     await _loadMatchReferees();
@@ -225,6 +230,16 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
     setState(() {
       _teamsById = {
         for (final team in teams) team.id: team,
+      };
+    });
+  }
+
+  Future<void> _loadVenues() async {
+    final venues = await _venuesService.getBySeason(_match.seasonId);
+    if (!mounted) return;
+    setState(() {
+      _venuesById = {
+        for (final venue in venues) venue.id: venue,
       };
     });
   }
@@ -556,6 +571,17 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            "${_weekdayEs(_match.matchDate)} ${_formatDateTime(_match.matchDate)} • ${_venueName(_match.venueId)}",
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 12,
+            ),
           ),
         ],
       ),
@@ -1627,6 +1653,41 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
         );
       }),
     );
+  }
+
+  String _formatDateTime(DateTime date) {
+    final hour = date.hour.toString().padLeft(2, '0');
+    final minute = date.minute.toString().padLeft(2, '0');
+    return "${date.day}/${date.month}/${date.year} $hour:$minute";
+  }
+
+  String _weekdayEs(DateTime date) {
+    switch (date.weekday) {
+      case DateTime.monday:
+        return 'Lunes';
+      case DateTime.tuesday:
+        return 'Martes';
+      case DateTime.wednesday:
+        return 'Miércoles';
+      case DateTime.thursday:
+        return 'Jueves';
+      case DateTime.friday:
+        return 'Viernes';
+      case DateTime.saturday:
+        return 'Sábado';
+      case DateTime.sunday:
+        return 'Domingo';
+      default:
+        return '';
+    }
+  }
+
+  String _venueName(String venueId) {
+    final name = _venuesById[venueId]?.name ?? '';
+    if (name.trim().isEmpty) {
+      return 'Escenario no definido';
+    }
+    return name;
   }
 
   String _statusLabelEs(String status) {

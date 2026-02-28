@@ -4,9 +4,11 @@ import '../../../models/season_category.dart';
 import '../../../services/matches_service.dart';
 import '../../../services/seasons_service.dart';
 import '../../../services/teams_service.dart';
+import '../../../services/venues_service.dart';
 import '../../../services/auth_service.dart';
 import '../../../models/match.dart';
 import '../../../models/team.dart';
+import '../../../models/venue.dart';
 import 'create_match_screen.dart';
 import 'match_detail_screen.dart';
 
@@ -29,10 +31,12 @@ class _MatchesListScreenState
   extends State<MatchesListScreen> {
     final MatchesService _service = MatchesService();
     final TeamsService _teamsService = TeamsService();
+    final VenuesService _venuesService = VenuesService();
     final SeasonsService _seasonsService =
         SeasonsService();
     late Future<List<Match>> _future;
     late Future<List<Team>> _teamsFuture;
+    late Future<List<Venue>> _venuesFuture;
     late Future<List<SeasonCategory>>
         _categoriesFuture;
     String? _selectedCategoryId;
@@ -42,6 +46,7 @@ class _MatchesListScreenState
       keepScrollOffset: false,
     );
     Map<String, Team> _teamsById = {};
+    Map<String, Venue> _venuesById = {};
 
     @override
     void initState(){
@@ -52,9 +57,13 @@ class _MatchesListScreenState
       _teamsFuture = _teamsService.getBySeason(
         widget.seasonId,
       );
+      _venuesFuture = _venuesService.getBySeason(
+        widget.seasonId,
+      );
       _categoriesFuture = _seasonsService
           .getCategoriesBySeason(widget.seasonId);
       _loadTeams();
+      _loadVenues();
     }
 
     @override
@@ -73,9 +82,13 @@ class _MatchesListScreenState
           widget.seasonId,
           categoryId: _selectedCategoryId,
         );
+        _venuesFuture = _venuesService.getBySeason(
+          widget.seasonId,
+        );
       });
       _scrollToTop();
       _loadTeams();
+      _loadVenues();
     }
 
     Future<void> _loadTeams() async {
@@ -84,6 +97,16 @@ class _MatchesListScreenState
       setState(() {
         _teamsById = {
           for (final team in teams) team.id: team,
+        };
+      });
+    }
+
+    Future<void> _loadVenues() async {
+      final venues = await _venuesFuture;
+      if (!mounted) return;
+      setState(() {
+        _venuesById = {
+          for (final venue in venues) venue.id: venue,
         };
       });
     }
@@ -101,9 +124,13 @@ class _MatchesListScreenState
           widget.seasonId,
           categoryId: categoryId,
         );
+        _venuesFuture = _venuesService.getBySeason(
+          widget.seasonId,
+        );
       });
       _scrollToTop();
       await _loadTeams();
+      await _loadVenues();
     }
 
     void _scrollToTop() {
@@ -338,12 +365,15 @@ class _MatchesListScreenState
                       size: 16,
                       color: Colors.white54),
                   const SizedBox(width: 6),
-                  Text(
-                    "${match.matchDate.day}/${match.matchDate.month}/${match.matchDate.year} "
-                    "${match.matchDate.hour}:${match.matchDate.minute.toString().padLeft(2, '0')}",
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 12,
+                  Expanded(
+                    child: Text(
+                      "${_weekdayEs(match.matchDate)} ${_formatDateTime(match.matchDate)} • ${_venueName(match.venueId)}",
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 11,
+                      ),
                     ),
                   ),
                 ],
@@ -587,6 +617,41 @@ class _MatchesListScreenState
 
     DateTime _ecuadorNow() {
       return DateTime.now().toUtc().subtract(const Duration(hours: 5));
+    }
+
+    String _formatDateTime(DateTime date) {
+      final hour = date.hour.toString().padLeft(2, '0');
+      final minute = date.minute.toString().padLeft(2, '0');
+      return "${date.day}/${date.month}/${date.year} $hour:$minute";
+    }
+
+    String _weekdayEs(DateTime date) {
+      switch (date.weekday) {
+        case DateTime.monday:
+          return 'Lunes';
+        case DateTime.tuesday:
+          return 'Martes';
+        case DateTime.wednesday:
+          return 'Miércoles';
+        case DateTime.thursday:
+          return 'Jueves';
+        case DateTime.friday:
+          return 'Viernes';
+        case DateTime.saturday:
+          return 'Sábado';
+        case DateTime.sunday:
+          return 'Domingo';
+        default:
+          return '';
+      }
+    }
+
+    String _venueName(String venueId) {
+      final name = _venuesById[venueId]?.name ?? '';
+      if (name.trim().isEmpty) {
+        return 'Escenario no definido';
+      }
+      return name;
     }
 
     Widget _teamInfo({
