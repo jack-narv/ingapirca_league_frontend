@@ -16,6 +16,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _authService = AuthService();
 
   bool _isLoading = false;
+  bool _obscurePassword = true;
   String? _error;
 
   void _login() async {
@@ -29,6 +30,7 @@ class _LoginScreenState extends State<LoginScreen> {
         _emailController.text.trim(),
         _passwordController.text.trim(),
       );
+      if (!mounted) return;
 
       Navigator.pushReplacement(
         context,
@@ -92,9 +94,21 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 15),
                       TextField(
                         controller: _passwordController,
-                        obscureText: true,
-                        decoration: const InputDecoration(
+                        obscureText: _obscurePassword,
+                        decoration: InputDecoration(
                           labelText: 'Contraseña',
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _obscurePassword = !_obscurePassword;
+                              });
+                            },
+                          ),
                         ),
                       ),
                       const SizedBox(height: 20),
