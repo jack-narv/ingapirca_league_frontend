@@ -59,6 +59,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
   Map<String, Venue> _venuesById = {};
 
   late Future<bool> _isAdminFuture;
+  late Future<bool> _canManageMatchFlowFuture;
   late Future<List<MatchLineupPlayer>> _homeLineupFuture;
   late Future<List<MatchLineupPlayer>> _awayLineupFuture;
 
@@ -88,6 +89,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
     super.initState();
     _match = widget.match;
     _isAdminFuture = AuthService().isAdmin();
+    _canManageMatchFlowFuture = AuthService().canManageMatchFlow();
     _prepareLineupFutures();
     _loadAll();
     _initLive();
@@ -642,7 +644,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
 
   Widget _buildAdminActions() {
     return FutureBuilder<bool>(
-      future: _isAdminFuture,
+      future: _canManageMatchFlowFuture,
       builder: (context, snapshot) {
         if (!snapshot.hasData || !snapshot.data!) {
           return const SizedBox();
@@ -1000,7 +1002,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
                 ),
               ),
               FutureBuilder<bool>(
-                future: _isAdminFuture,
+                future: _canManageMatchFlowFuture,
                 builder: (context, snapshot) {
                   if (snapshot.data != true) {
                     return const SizedBox();

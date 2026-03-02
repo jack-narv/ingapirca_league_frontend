@@ -68,18 +68,34 @@ class AuthService {
 
   Future<void> logout() async {
     await _storage.delete(key: "jwt");
+    await _storage.delete(key: "roles");
+  }
+
+  Future<Set<String>> _getRoleSet() async {
+    final rawRoles = await _storage.read(key: "roles");
+    if (rawRoles == null || rawRoles.trim().isEmpty) {
+      return <String>{};
+    }
+
+    return rawRoles
+        .split(',')
+        .map((role) => role.trim().toUpperCase())
+        .where((role) => role.isNotEmpty)
+        .toSet();
   }
 
   Future<bool> isAdmin() async {
-    final roles = await _storage.read(key: "roles");
-    if (roles == null) return false;
-    return roles.split(',').contains("ADMIN");
+    final roles = await _getRoleSet();
+    return roles.contains("ADMIN");
   }
 
   Future<bool> canManageTeams() async {
-    final roles = await _storage.read(key: "roles");
-    if (roles == null) return false;
-    return roles.contains('ADMIN') ||
-          roles.contains('LEAGUE_ADMIN');
+    final roles = await _getRoleSet();
+    return roles.contains('ADMIN') || roles.contains('LEAGUE_ADMIN');
+  }
+
+  Future<bool> canManageMatchFlow() async {
+    final roles = await _getRoleSet();
+    return roles.contains('ADMIN') || roles.contains('VOCAL');
   }
 }

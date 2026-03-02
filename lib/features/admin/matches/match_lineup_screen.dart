@@ -83,11 +83,13 @@ class _MatchLineupScreenState extends State<MatchLineupScreen> {
 
   void _checkRole() async {
     final isAdmin = await AuthService().isAdmin();
+    final canManageMatchFlow =
+        await AuthService().canManageMatchFlow();
     final canManage = await AuthService().canManageTeams();
     if (!mounted) return;
     setState(() {
-      _isAdmin = isAdmin;
-      _canEdit = canManage;
+      _isAdmin = isAdmin || canManageMatchFlow;
+      _canEdit = canManage || canManageMatchFlow;
     });
   }
 

@@ -104,7 +104,7 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
 
   Future<void> _bootstrapData() async {
     try {
-      final canAdd = await AuthService().isAdmin();
+      final canAdd = await AuthService().canManageMatchFlow();
       final match = await _matchesService.getMatch(widget.matchId);
       final teams = await _teamsService.getBySeason(match.seasonId);
       final homeLineup =
