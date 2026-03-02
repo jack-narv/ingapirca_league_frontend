@@ -55,4 +55,24 @@ class MatchEventsService {
       throw Exception("Error creando evento");
     }
   }
+
+  Future<void> deleteEvent(String eventId) async {
+    final response = await http.delete(
+      Uri.parse("$baseUrl/match-events/$eventId"),
+      headers: await _headers(),
+    );
+
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      String message = "Error eliminando evento";
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map && decoded["message"] != null) {
+          message = decoded["message"].toString();
+        }
+      } catch (_) {
+        // keep default error message
+      }
+      throw Exception(message);
+    }
+  }
 }
