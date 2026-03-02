@@ -3,8 +3,10 @@ import '../../../core/navigation/season_bottom_nav.dart';
 import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../models/season_category.dart';
 import '../../../models/standings.dart';
+import '../../../models/team.dart';
 import '../../../services/seasons_service.dart';
 import '../../../services/standings_service.dart';
+import '../../../services/teams_service.dart';
 
 class StandingsScreen extends StatefulWidget {
   final String seasonId;
@@ -23,6 +25,7 @@ class StandingsScreen extends StatefulWidget {
 class _StandingsScreenState extends State<StandingsScreen> {
   final StandingsService _standingsService = StandingsService();
   final SeasonsService _seasonsService = SeasonsService();
+  final TeamsService _teamsService = TeamsService();
 
   late Future<List<SeasonCategory>> _categoriesFuture;
   late Future<List<Standing>> _standingsFuture;
@@ -35,7 +38,16 @@ class _StandingsScreenState extends State<StandingsScreen> {
   void initState() {
     super.initState();
     _categoriesFuture = _seasonsService.getCategoriesBySeason(widget.seasonId);
-    _standingsFuture = _standingsService.getBySeason(widget.seasonId);
+    _standingsFuture = _categoriesFuture.then((categories) {
+      if (categories.isEmpty) {
+        _selectedCategoryId = null;
+        return <Standing>[];
+      }
+
+      final initialCategoryId = categories.first.id;
+      _selectedCategoryId = initialCategoryId;
+      return _loadStandingsForCategory(initialCategoryId);
+    });
   }
 
   @override
@@ -44,15 +56,68 @@ class _StandingsScreenState extends State<StandingsScreen> {
     super.dispose();
   }
 
-  void _applyCategory(String? categoryId) {
+  void _applyCategory(String categoryId) {
     setState(() {
       _selectedCategoryId = categoryId;
-      _standingsFuture = _standingsService.getBySeason(
-        widget.seasonId,
-        categoryId: categoryId,
-      );
+      _standingsFuture = _loadStandingsForCategory(categoryId);
     });
     _scrollToTop();
+  }
+
+  Future<List<Standing>> _loadStandingsForCategory(String categoryId) async {
+    final results = await Future.wait([
+      _standingsService.getBySeason(widget.seasonId, categoryId: categoryId),
+      _teamsService.getBySeason(widget.seasonId, categoryId: categoryId),
+    ]);
+
+    final standings = results[0] as List<Standing>;
+    final teams = results[1] as List<Team>;
+
+    final teamIdsInStandings = standings
+        .map((s) => s.teamId)
+        .where((id) => id.isNotEmpty)
+        .toSet();
+
+    final missingRows = teams.where((team) {
+      final teamId = team.id;
+      return teamId.isNotEmpty && !teamIdsInStandings.contains(teamId);
+    }).map((team) {
+      return Standing(
+        id: 'virtual-${team.id}',
+        seasonId: widget.seasonId,
+        teamId: team.id,
+        played: 0,
+        wins: 0,
+        draws: 0,
+        losses: 0,
+        goalsFor: 0,
+        goalsAgainst: 0,
+        points: 0,
+        teamName: team.name,
+        teamLogoUrl: team.logoUrl,
+        teamCategoryId: team.categoryId ?? categoryId,
+      );
+    });
+
+    final merged = <Standing>[
+      ...standings,
+      ...missingRows,
+    ];
+
+    merged.sort((a, b) {
+      final byPoints = b.points.compareTo(a.points);
+      if (byPoints != 0) return byPoints;
+
+      final byGoalDiff = b.goalDifference.compareTo(a.goalDifference);
+      if (byGoalDiff != 0) return byGoalDiff;
+
+      final byGoalsFor = b.goalsFor.compareTo(a.goalsFor);
+      if (byGoalsFor != 0) return byGoalsFor;
+
+      return a.teamName.toLowerCase().compareTo(b.teamName.toLowerCase());
+    });
+
+    return merged;
   }
 
   void _scrollToTop() {
@@ -215,32 +280,39 @@ class _StandingsScreenState extends State<StandingsScreen> {
                   final safeSelectedCategoryId =
                       validCategoryIds.contains(_selectedCategoryId)
                           ? _selectedCategoryId
-                          : null;
+                          : (categories.isNotEmpty ? categories.first.id : null);
+
+                  if (safeSelectedCategoryId != null &&
+                      safeSelectedCategoryId != _selectedCategoryId) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (!mounted) return;
+                      _applyCategory(safeSelectedCategoryId);
+                    });
+                  }
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 16),
-                    child: DropdownButtonFormField<String?>(
+                    child: DropdownButtonFormField<String>(
                       key: ValueKey(
-                        safeSelectedCategoryId ?? 'all-categories',
+                        safeSelectedCategoryId ?? 'no-categories',
                       ),
                       initialValue: safeSelectedCategoryId,
                       decoration: const InputDecoration(
                         labelText: "Filtrar por categoria",
                         prefixIcon: Icon(Icons.category),
                       ),
-                      items: [
-                        const DropdownMenuItem<String?>(
-                          value: null,
-                          child: Text("Todas las categorias"),
+                      items: categories.map(
+                        (category) => DropdownMenuItem<String>(
+                          value: category.id,
+                          child: Text(category.name),
                         ),
-                        ...categories.map(
-                          (category) => DropdownMenuItem<String?>(
-                            value: category.id,
-                            child: Text(category.name),
-                          ),
-                        ),
-                      ],
-                      onChanged: _applyCategory,
+                      ).toList(),
+                      onChanged: categories.isEmpty
+                          ? null
+                          : (value) {
+                              if (value == null) return;
+                              _applyCategory(value);
+                            },
                     ),
                   );
                 },
