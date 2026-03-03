@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
+import '../../../core/navigation/season_bottom_nav.dart';
 import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../models/season_category.dart';
 import '../../../models/team.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/seasons_service.dart';
 import '../../../services/teams_service.dart';
-import '../../home/home_screen.dart';
 import 'create_team_screen.dart';
 import 'team_detail_screen.dart';
 
@@ -75,29 +75,19 @@ class _TeamsListScreenState extends State<TeamsListScreen> {
     _scrollController.jumpTo(0);
   }
 
-  void _handleBottomNavTap(int index) {
-    if (index == 0) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-        (route) => false,
-      );
-      return;
-    }
-
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const HomeScreen(initialIndex: 1)),
-      (route) => false,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return AppScaffoldWithNav(
       title: widget.seasonName,
-      currentIndex: 0,
-      onNavTap: _handleBottomNavTap,
+      currentIndex: 2,
+      navItems: seasonNavItems,
+      onNavTap: (index) => handleSeasonNavTap(
+        context,
+        tappedIndex: index,
+        currentIndex: 2,
+        seasonId: widget.seasonId,
+        seasonName: widget.seasonName,
+      ),
       floatingActionButton: FutureBuilder<bool>(
         future: AuthService().canManageTeams(),
         builder: (context, snapshot) {
@@ -110,7 +100,10 @@ class _TeamsListScreenState extends State<TeamsListScreen> {
               await Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => CreateTeamScreen(seasonId: widget.seasonId),
+                  builder: (_) => CreateTeamScreen(
+                    seasonId: widget.seasonId,
+                    seasonName: widget.seasonName,
+                  ),
                 ),
               );
               _refresh();
@@ -199,6 +192,7 @@ class _TeamsListScreenState extends State<TeamsListScreen> {
                     builder: (_) => TeamDetailScreen(
                       team: team,
                       seasonId: widget.seasonId,
+                      seasonName: widget.seasonName,
                     ),
                   ),
                 );

@@ -1,5 +1,6 @@
 ﻿import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../../core/navigation/season_bottom_nav.dart';
 import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../models/match.dart';
 import '../../../models/match_event.dart';
@@ -15,10 +16,14 @@ import 'add_match_event_dialog.dart';
 
 class LiveMatchScreen extends StatefulWidget {
   final String matchId;
+  final String seasonId;
+  final String seasonName;
 
   const LiveMatchScreen({
     super.key,
     required this.matchId,
+    required this.seasonId,
+    required this.seasonName,
   });
 
   @override
@@ -36,6 +41,7 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
   bool _connected = false;
   bool _canAddEvents = false;
   bool _bootstrapping = true;
+  String? _deletingEventId;
 
   int _homeScore = 0;
   int _awayScore = 0;
@@ -99,7 +105,7 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
 
   Future<void> _bootstrapData() async {
     try {
-      final canAdd = await AuthService().isAdmin();
+      final canAdd = await AuthService().canManageMatchFlow();
       final match = await _matchesService.getMatch(widget.matchId);
       final teams = await _teamsService.getBySeason(match.seasonId);
       final homeLineup =
@@ -133,6 +139,7 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
 
   Map<String, dynamic> _eventToMap(MatchEvent e) {
     return _decorateEvent({
+      'id': e.id,
       'event_type': e.eventType,
       'minute': e.minute,
       'team_id': e.teamId,
@@ -218,13 +225,83 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
     );
 
     if (ok == true) {
-      final timeline = await _eventsService.getTimeline(widget.matchId);
+      await _refreshTimelineAndScore();
+    }
+  }
+
+  Future<void> _refreshTimelineAndScore() async {
+    final timeline = await _eventsService.getTimeline(widget.matchId);
+    final updatedMatch = await _matchesService.getMatch(widget.matchId);
+    if (!mounted) return;
+    setState(() {
+      _homeScore = updatedMatch.homeScore;
+      _awayScore = updatedMatch.awayScore;
+      _events
+        ..clear()
+        ..addAll(timeline.reversed.map(_eventToMap));
+    });
+  }
+
+  Future<void> _deleteEvent(Map<String, dynamic> event) async {
+    if (_deletingEventId != null) return;
+
+    final eventId = (event['id'] ?? '').toString();
+    if (eventId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Este evento no se puede eliminar'),
+        ),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Eliminar evento'),
+        content: const Text(
+          'Se eliminara el evento y se revertira marcador/estadisticas. Continuar?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _deletingEventId = eventId);
+    try {
+      await _eventsService.deleteEvent(eventId);
+      await _refreshTimelineAndScore();
       if (!mounted) return;
-      setState(() {
-        _events
-          ..clear()
-          ..addAll(timeline.reversed.map(_eventToMap));
-      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Evento eliminado'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      final raw = e.toString();
+      final message = raw.startsWith('Exception: ')
+          ? raw.replaceFirst('Exception: ', '')
+          : raw;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _deletingEventId = null);
+      }
     }
   }
 
@@ -243,8 +320,15 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
   Widget build(BuildContext context) {
     return AppScaffoldWithNav(
       title: 'En Vivo',
-      currentIndex: 0,
-      onNavTap: (_) {},
+      currentIndex: 1,
+      navItems: seasonNavItems,
+      onNavTap: (index) => handleSeasonNavTap(
+        context,
+        tappedIndex: index,
+        currentIndex: 1,
+        seasonId: widget.seasonId,
+        seasonName: widget.seasonName,
+      ),
       floatingActionButton: _canAddEvents
           ? FloatingActionButton(
               onPressed: _addEvent,
@@ -510,6 +594,7 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
   }
 
   Widget _buildEventTile(Map<String, dynamic> e) {
+    final eventId = (e['id'] ?? '').toString();
     final type = (e['type'] ?? e['event_type'] ?? 'EVENT').toString();
     final typeLabel = _eventLabelEs(type);
     final minute = e['minute']?.toString();
@@ -584,6 +669,23 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
               ],
             ),
           ),
+          if (_canAddEvents)
+            IconButton(
+              tooltip: 'Eliminar evento',
+              onPressed: (eventId.isEmpty || _deletingEventId != null)
+                  ? null
+                  : () => _deleteEvent(e),
+              icon: _deletingEventId == eventId
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(
+                      Icons.delete_outline,
+                      color: Colors.redAccent,
+                    ),
+            ),
         ],
       ),
     );

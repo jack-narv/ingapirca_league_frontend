@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/navigation/season_bottom_nav.dart';
 import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../models/referees.dart';
 import '../../../services/auth_service.dart';
@@ -40,7 +41,14 @@ class _RefereesListScreenState extends State<RefereesListScreen> {
     return AppScaffoldWithNav(
       title: "Arbitros - ${widget.seasonName}",
       currentIndex: 0,
-      onNavTap: (_) {},
+      navItems: seasonNavItems,
+      onNavTap: (index) => handleSeasonNavTap(
+        context,
+        tappedIndex: index,
+        currentIndex: 0,
+        seasonId: widget.seasonId,
+        seasonName: widget.seasonName,
+      ),
       floatingActionButton: FutureBuilder<bool>(
         future: AuthService().isAdmin(),
         builder: (context, snapshot) {
@@ -55,6 +63,7 @@ class _RefereesListScreenState extends State<RefereesListScreen> {
                 MaterialPageRoute(
                   builder: (_) => CreateRefereeScreen(
                     seasonId: widget.seasonId,
+                    seasonName: widget.seasonName,
                   ),
                 ),
               );
@@ -160,10 +169,6 @@ class _RefereesListScreenState extends State<RefereesListScreen> {
                             ),
                           ),
                           const SizedBox(height: 6),
-                          Text(
-                            "Licencia: ${referee.licenseNumber}",
-                            style: const TextStyle(color: Colors.white70),
-                          ),
                           if ((referee.phone ?? '').trim().isNotEmpty)
                             Text(
                               "Telefono: ${referee.phone}",

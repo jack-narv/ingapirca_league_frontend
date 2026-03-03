@@ -17,6 +17,8 @@ class _RegisterScreenState extends State<RegisterScreen>{
   final _authService = AuthService();
 
   bool _isLoading = false;
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
   String? _error;
 
   void _register() async{
@@ -38,6 +40,7 @@ class _RegisterScreenState extends State<RegisterScreen>{
         _passwordController.text.trim(),
         _fullNameController.text.trim(),
       );
+      if (!mounted) return;
 
       Navigator.pushReplacement(
         context,
@@ -96,18 +99,43 @@ class _RegisterScreenState extends State<RegisterScreen>{
 
                 TextField(
                   controller: _passwordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(
+                  obscureText: _obscurePassword,
+                  decoration: InputDecoration(
                     labelText: "Contraseña",
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscurePassword = !_obscurePassword;
+                        });
+                      },
+                    ),
                   ),
                 ),
                 const SizedBox(height: 15),
 
                 TextField(
                   controller: _confirmPasswordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(
+                  obscureText: _obscureConfirmPassword,
+                  decoration: InputDecoration(
                     labelText: "Confirmar Contraseña",
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscureConfirmPassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscureConfirmPassword =
+                              !_obscureConfirmPassword;
+                        });
+                      },
+                    ),
                   ),
                 ),
 

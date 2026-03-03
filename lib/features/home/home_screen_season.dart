@@ -5,34 +5,89 @@ import '../admin/referees/referees_list_screen.dart';
 import '../admin/standings/standings_screen.dart';
 import '../admin/teams/teams_list_screen.dart';
 import '../admin/venues/venues_list_screen.dart';
-import 'home_screen.dart';
 import '../admin/seasons/season_statistics_screen.dart';
 import '../admin/seasons/season_sanctions_screen.dart';
 import '../admin/matches/matches_list_screen.dart';
 
 class HomeScreenSeason extends StatelessWidget {
   final Season season;
+  static const List<BottomNavigationBarItem> _seasonNavItems = [
+    BottomNavigationBarItem(
+      icon: Icon(Icons.home_outlined),
+      label: 'Inicio',
+    ),
+    BottomNavigationBarItem(
+      icon: Icon(Icons.sports_soccer),
+      label: 'Partidos',
+    ),
+    BottomNavigationBarItem(
+      icon: Icon(Icons.groups),
+      label: 'Equipos',
+    ),
+    BottomNavigationBarItem(
+      icon: Icon(Icons.emoji_events_outlined),
+      label: 'Tabla',
+    ),
+  ];
 
   const HomeScreenSeason({
     super.key,
     required this.season,
   });
 
+  HomeScreenSeason.basic({
+    super.key,
+    required String seasonId,
+    required String seasonName,
+    String seasonStatus = 'Temporada',
+  }) : season = Season(
+          id: seasonId,
+          leagueId: '',
+          name: seasonName,
+          status: seasonStatus,
+          startDate: DateTime(1970, 1, 1),
+          endDate: DateTime(1970, 1, 1),
+        );
+
   void _handleBottomNavTap(BuildContext context, int index) {
-    if (index == 0) {
-      Navigator.pushAndRemoveUntil(
+    if (index == 0) return;
+    if (index == 1) {
+      Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-        (route) => false,
+        MaterialPageRoute(
+          builder: (_) => MatchesListScreen(
+            seasonId: season.id,
+            seasonName: season.name,
+          ),
+        ),
       );
       return;
     }
 
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const HomeScreen(initialIndex: 1)),
-      (route) => false,
-    );
+    if (index == 2) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => TeamsListScreen(
+            seasonId: season.id,
+            seasonName: season.name,
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (index == 3) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => StandingsScreen(
+            seasonId: season.id,
+            seasonName: season.name,
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -40,6 +95,7 @@ class HomeScreenSeason extends StatelessWidget {
     return AppScaffoldWithNav(
       title: season.name,
       currentIndex: 0,
+      navItems: _seasonNavItems,
       onNavTap: (index) => _handleBottomNavTap(context, index),
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),

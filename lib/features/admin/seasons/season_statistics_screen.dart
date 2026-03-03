@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/navigation/season_bottom_nav.dart';
 import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../models/match.dart';
 import '../../../models/match_event.dart';
@@ -171,7 +172,14 @@ class _SeasonStatisticsScreenState extends State<SeasonStatisticsScreen> {
     return AppScaffoldWithNav(
       title: "Estadisticas - ${widget.season.name}",
       currentIndex: 0,
-      onNavTap: (_) {},
+      navItems: seasonNavItems,
+      onNavTap: (index) => handleSeasonNavTap(
+        context,
+        tappedIndex: index,
+        currentIndex: 0,
+        seasonId: widget.season.id,
+        seasonName: widget.season.name,
+      ),
       body: FutureBuilder<_SeasonStatsData>(
         future: _future,
         builder: (context, snapshot) {

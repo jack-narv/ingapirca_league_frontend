@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
+import '../../../core/navigation/season_bottom_nav.dart';
 import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../core/widgets/primary_gradient_button.dart';
 import '../../../services/venues_service.dart';
 
 class CreateVenueScreen extends StatefulWidget{
   final String seasonId;
+  final String seasonName;
 
   const CreateVenueScreen({
     super.key,
     required this.seasonId,
+    required this.seasonName,
   });
 
   @override
@@ -72,7 +75,14 @@ class _CreateVenueScreenState
       return AppScaffoldWithNav(
         title: "Crear Escenario",
         currentIndex: 0,
-        onNavTap: (_) {},
+        navItems: seasonNavItems,
+        onNavTap: (index) => handleSeasonNavTap(
+          context,
+          tappedIndex: index,
+          currentIndex: 0,
+          seasonId: widget.seasonId,
+          seasonName: widget.seasonName,
+        ),
         body: Padding(
           padding:
               const EdgeInsets.all(24),
