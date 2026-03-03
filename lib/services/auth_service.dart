@@ -72,6 +72,34 @@ class AuthService {
     }
   }
 
+  Future<void> deleteAccount() async {
+    final token = await getToken();
+    if (token == null || token.trim().isEmpty) {
+      throw Exception("No hay sesion activa");
+    }
+
+    final response = await http.delete(
+      Uri.parse("$baseUrl/auth/account"),
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer $token",
+      },
+    );
+
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      String message = "No se pudo eliminar la cuenta";
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map && decoded["message"] != null) {
+          message = decoded["message"].toString();
+        }
+      } catch (_) {
+        // keep default message
+      }
+      throw Exception(message);
+    }
+  }
+
   Future<String?> getToken() async {
     final token = await _storage.read(key: _jwtKey);
     if (_isTokenValid(token)) {
