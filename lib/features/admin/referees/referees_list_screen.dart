@@ -169,10 +169,6 @@ class _RefereesListScreenState extends State<RefereesListScreen> {
                             ),
                           ),
                           const SizedBox(height: 6),
-                          Text(
-                            "Licencia: ${referee.licenseNumber}",
-                            style: const TextStyle(color: Colors.white70),
-                          ),
                           if ((referee.phone ?? '').trim().isNotEmpty)
                             Text(
                               "Telefono: ${referee.phone}",

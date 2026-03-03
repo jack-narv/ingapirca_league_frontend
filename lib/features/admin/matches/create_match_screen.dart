@@ -458,7 +458,9 @@ class _CreateMatchScreenState
                       label: "Jornada de Eliminación",
                       value: _selectedKnockoutJournal,
                       items: [null, ..._knockoutJournalOptions],
-                      getLabel: (journal) => journal ?? "Sin seleccionar",
+                      getLabel: (journal) => journal == null
+                          ? "Sin seleccionar"
+                          : _knockoutJournalDisplayLabel(journal),
                       onChanged: (value) {
                         setState(() {
                           _selectedKnockoutJournal = value;
@@ -724,6 +726,17 @@ class _CreateMatchScreenState
       return 'JORNADA ${match.group(1)}';
     }
     return normalized;
+  }
+
+  String _knockoutJournalDisplayLabel(String journal) {
+    const labels = <String, String>{
+      'ROUND OF 32': 'Ronda de 32',
+      'ROUND OF 8': 'Octavos de Final',
+      'QUARTERFINALS': 'Cuartos de final',
+      'SEMIFINAL': 'Semifinal',
+      'FINAL': 'Final',
+    };
+    return labels[journal] ?? journal;
   }
 
   String _formatErrorMessage(Object error) {
