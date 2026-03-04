@@ -37,8 +37,16 @@ class _LoginScreenState extends State<LoginScreen> {
         MaterialPageRoute(builder: (_) => const HomeScreen()),
       );
     } catch (e) {
+      final message = e.toString().replaceFirst('Exception: ', '');
+      final lowerMessage = message.toLowerCase();
+      final isNetworkError = lowerMessage.contains('socketexception') ||
+          lowerMessage.contains('failed host lookup') ||
+          lowerMessage.contains('connection refused') ||
+          lowerMessage.contains('network is unreachable') ||
+          lowerMessage.contains('timed out');
+
       setState(() {
-        _error = 'Credenciales inválidas';
+        _error = isNetworkError ? 'No se pudo conectar al servidor' : message;
       });
     } finally {
       setState(() {
@@ -147,3 +155,4 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
+

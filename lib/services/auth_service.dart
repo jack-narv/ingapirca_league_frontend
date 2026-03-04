@@ -45,7 +45,21 @@ class AuthService {
       }
       return auth;
     } else {
-      throw Exception("Login failed");
+      String message = "Credenciales inválidas";
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map && decoded["message"] != null) {
+          final serverMessage = decoded["message"];
+          if (serverMessage is List && serverMessage.isNotEmpty) {
+            message = serverMessage.first.toString();
+          } else {
+            message = serverMessage.toString();
+          }
+        }
+      } catch (_) {
+        // Keep fallback message if response body is not JSON.
+      }
+      throw Exception(message);
     }
   }
 

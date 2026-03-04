@@ -1,4 +1,4 @@
-package com.example.ingapirca_league_frontend
+package com.nextliga.app
 
 import io.flutter.embedding.android.FlutterActivity
 
