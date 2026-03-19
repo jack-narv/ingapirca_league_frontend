@@ -24,11 +24,27 @@ class SeasonsService {
     }
   }
 
+  Future<Season> getById(String seasonId) async {
+    final response = await http.get(
+      Uri.parse("$baseUrl/seasons/$seasonId"),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return Season.fromJson(data);
+    }
+
+    throw Exception("No se pudo cargar la temporada");
+  }
+
   Future<Season> createSeason({
     required String leagueId,
     required String name,
     required DateTime startDate,
     required DateTime endDate,
+    int twoYellowsMatchesAffected = 1,
+    int directRedMatchesAffected = 1,
+    int gameNumberPlayers = 11,
   }) async{
     final token = await _storage.read(key: "jwt");
 
@@ -43,6 +59,9 @@ class SeasonsService {
         "name": name,
         "start_date": EcuadorTime.dateOnlyIso(startDate),
         "end_date": EcuadorTime.dateOnlyIso(endDate),
+        "two_yellows_matches_affected": twoYellowsMatchesAffected,
+        "direct_red_matches_affected": directRedMatchesAffected,
+        "game_number_players": gameNumberPlayers,
       }),
     );
 

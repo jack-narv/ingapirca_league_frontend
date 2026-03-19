@@ -168,12 +168,6 @@ class _RefereesListScreenState extends State<RefereesListScreen> {
                               fontSize: 16,
                             ),
                           ),
-                          const SizedBox(height: 6),
-                          if ((referee.phone ?? '').trim().isNotEmpty)
-                            Text(
-                              "Telefono: ${referee.phone}",
-                              style: const TextStyle(color: Colors.white60),
-                            ),
                         ],
                       ),
                     ),

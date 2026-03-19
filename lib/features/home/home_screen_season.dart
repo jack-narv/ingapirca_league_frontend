@@ -8,6 +8,7 @@ import '../admin/venues/venues_list_screen.dart';
 import '../admin/seasons/season_statistics_screen.dart';
 import '../admin/seasons/season_sanctions_screen.dart';
 import '../admin/matches/matches_list_screen.dart';
+import '../../services/seasons_service.dart';
 
 class HomeScreenSeason extends StatelessWidget {
   final Season season;
@@ -34,20 +35,6 @@ class HomeScreenSeason extends StatelessWidget {
     super.key,
     required this.season,
   });
-
-  HomeScreenSeason.basic({
-    super.key,
-    required String seasonId,
-    required String seasonName,
-    String seasonStatus = 'Temporada',
-  }) : season = Season(
-          id: seasonId,
-          leagueId: '',
-          name: seasonName,
-          status: seasonStatus,
-          startDate: DateTime(1970, 1, 1),
-          endDate: DateTime(1970, 1, 1),
-        );
 
   void _handleBottomNavTap(BuildContext context, int index) {
     if (index == 0) return;
@@ -229,6 +216,83 @@ class HomeScreenSeason extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class HomeScreenSeasonLoader extends StatefulWidget {
+  final String seasonId;
+  final String seasonName;
+
+  const HomeScreenSeasonLoader({
+    super.key,
+    required this.seasonId,
+    required this.seasonName,
+  });
+
+  @override
+  State<HomeScreenSeasonLoader> createState() =>
+      _HomeScreenSeasonLoaderState();
+}
+
+class _HomeScreenSeasonLoaderState
+    extends State<HomeScreenSeasonLoader> {
+  final SeasonsService _seasonsService = SeasonsService();
+
+  late Future<Season> _futureSeason;
+
+  @override
+  void initState() {
+    super.initState();
+    _futureSeason = _seasonsService.getById(widget.seasonId);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Season>(
+      future: _futureSeason,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return AppScaffoldWithNav(
+            title: widget.seasonName,
+            currentIndex: 0,
+            onNavTap: (_) {},
+            body: const Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (snapshot.hasError || !snapshot.hasData) {
+          return AppScaffoldWithNav(
+            title: widget.seasonName,
+            currentIndex: 0,
+            onNavTap: (_) {},
+            body: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'No se pudo cargar la temporada',
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton(
+                    onPressed: () {
+                      setState(() {
+                        _futureSeason = _seasonsService.getById(
+                          widget.seasonId,
+                        );
+                      });
+                    },
+                    child: const Text('Reintentar'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return HomeScreenSeason(season: snapshot.data!);
+      },
     );
   }
 }

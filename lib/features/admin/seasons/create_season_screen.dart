@@ -31,6 +31,8 @@ class CreateSeasonScreen extends StatefulWidget {
 
 class _CreateSeasonScreenState extends State<CreateSeasonScreen> {
   final _nameController = TextEditingController();
+  final _twoYellowsController = TextEditingController(text: '1');
+  final _directRedController = TextEditingController(text: '1');
   final SeasonsService _service = SeasonsService();
   final AuthService _authService = AuthService();
   final _formatter = DateFormat("yyyy/MM/dd");
@@ -40,6 +42,7 @@ class _CreateSeasonScreenState extends State<CreateSeasonScreen> {
   bool _isAdmin = false;
   bool _checkingRole = true;
   bool _loading = false;
+  int _gameNumberPlayers = 11;
   final List<_CategoryDraft> _categoryDrafts = [];
 
   @override
@@ -51,6 +54,8 @@ class _CreateSeasonScreenState extends State<CreateSeasonScreen> {
   @override
   void dispose() {
     _nameController.dispose();
+    _twoYellowsController.dispose();
+    _directRedController.dispose();
     for (final draft in _categoryDrafts) {
       draft.dispose();
     }
@@ -123,6 +128,27 @@ class _CreateSeasonScreenState extends State<CreateSeasonScreen> {
       return;
     }
 
+    final twoYellows = int.tryParse(_twoYellowsController.text.trim());
+    final directRed = int.tryParse(_directRedController.text.trim());
+
+    if (twoYellows == null || twoYellows < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Tarjetas amarillas: ingresa un numero entero >= 0"),
+        ),
+      );
+      return;
+    }
+
+    if (directRed == null || directRed < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Roja directa: ingresa un numero entero >= 0"),
+        ),
+      );
+      return;
+    }
+
     final categoryNames = _categoryDrafts
         .map((d) => d.nameController.text.trim())
         .where((name) => name.isNotEmpty)
@@ -145,6 +171,9 @@ class _CreateSeasonScreenState extends State<CreateSeasonScreen> {
         name: _nameController.text.trim(),
         startDate: _startDate!,
         endDate: _endDate!,
+        twoYellowsMatchesAffected: twoYellows,
+        directRedMatchesAffected: directRed,
+        gameNumberPlayers: _gameNumberPlayers,
       );
 
       if (_isAdmin && categoryNames.isNotEmpty) {
@@ -206,6 +235,74 @@ class _CreateSeasonScreenState extends State<CreateSeasonScreen> {
           labelText: "Nombre de la temporada",
           prefixIcon: Icon(Icons.event_note),
         ),
+      ),
+    );
+  }
+
+  Widget _buildRulesCard() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        color: const Color(0xFF1A2332),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.4),
+            blurRadius: 12,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Reglas de temporada",
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _twoYellowsController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: "Partidos por doble amarilla",
+              hintText: "Ej. 1",
+              prefixIcon: Icon(Icons.warning_amber_outlined),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _directRedController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: "Partidos por roja directa",
+              hintText: "Ej. 1",
+              prefixIcon: Icon(Icons.report_gmailerrorred_outlined),
+            ),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<int>(
+            initialValue: _gameNumberPlayers,
+            decoration: const InputDecoration(
+              labelText: "Numero de jugadores por partido",
+              prefixIcon: Icon(Icons.groups_2_outlined),
+            ),
+            items: const [
+              DropdownMenuItem(value: 7, child: Text("7 jugadores")),
+              DropdownMenuItem(value: 8, child: Text("8 jugadores")),
+              DropdownMenuItem(value: 9, child: Text("9 jugadores")),
+              DropdownMenuItem(value: 11, child: Text("11 jugadores")),
+            ],
+            onChanged: (value) {
+              if (value == null) return;
+              setState(() => _gameNumberPlayers = value);
+            },
+          ),
+        ],
       ),
     );
   }
@@ -274,6 +371,7 @@ class _CreateSeasonScreenState extends State<CreateSeasonScreen> {
             ),
             const SizedBox(height: 30),
             _buildInput(),
+            _buildRulesCard(),
             _buildDateCard(
               label: "Selecciona fecha de inicio",
               date: _startDate,

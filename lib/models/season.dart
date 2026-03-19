@@ -5,6 +5,9 @@ class Season {
   final String status;
   final DateTime startDate;
   final DateTime endDate;
+  final int twoYellowsMatchesAffected;
+  final int directRedMatchesAffected;
+  final int gameNumberPlayers;
 
   Season({
     required this.id,
@@ -13,6 +16,9 @@ class Season {
     required this.status,
     required this.startDate,
     required this.endDate,
+    required this.twoYellowsMatchesAffected,
+    required this.directRedMatchesAffected,
+    required this.gameNumberPlayers,
   });
 
   factory Season.fromJson(Map<String, dynamic> json) {
@@ -36,6 +42,18 @@ class Season {
       status: json['status'],
       startDate: parseDateOnly(json['start_date']),
       endDate: parseDateOnly(json['end_date']),
+      twoYellowsMatchesAffected: int.tryParse(
+            (json['two_yellows_matches_affected'] ?? 1).toString(),
+          ) ??
+          1,
+      directRedMatchesAffected: int.tryParse(
+            (json['direct_red_matches_affected'] ?? 1).toString(),
+          ) ??
+          1,
+      gameNumberPlayers: int.tryParse(
+            (json['game_number_players'] ?? 11).toString(),
+          ) ??
+          11,
     );
   }
 }

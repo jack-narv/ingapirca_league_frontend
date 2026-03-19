@@ -149,7 +149,7 @@ class _AdminLeagueListScreenState extends State<AdminLeaguesListScreen> {
   @override
   Widget build(BuildContext context) {
     return AppScaffoldWithNav(
-      title: "Admin Panel",
+      title: "Panel de Campeonatos",
       currentIndex: 0,
       onNavTap: _handleBottomNavTap,
       floatingActionButton: FutureBuilder<bool>(

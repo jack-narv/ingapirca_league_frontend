@@ -6,8 +6,10 @@ import '../../../models/suspended_player.dart';
 import '../../../models/team_player.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/match_lineups_service.dart';
+import '../../../services/matches_service.dart';
 import '../../../services/players_service.dart';
 import '../../../services/sanctions_service.dart';
+import '../../../services/seasons_service.dart';
 
 class MatchLineupScreen extends StatefulWidget {
   final String matchId;
@@ -27,8 +29,10 @@ class MatchLineupScreen extends StatefulWidget {
 
 class _MatchLineupScreenState extends State<MatchLineupScreen> {
   final MatchLineupsService _service = MatchLineupsService();
+  final MatchesService _matchesService = MatchesService();
   final PlayersService _playersService = PlayersService();
   final SanctionsService _sanctionsService = SanctionsService();
+  final SeasonsService _seasonsService = SeasonsService();
 
   late Future<List<MatchLineupPlayer>> _future;
 
@@ -40,6 +44,8 @@ class _MatchLineupScreenState extends State<MatchLineupScreen> {
   bool _canEdit = false;
   bool _isAdmin = false;
   bool _initialized = false;
+  int _allowedStartingPlayers = 11;
+  bool _loadingRules = false;
 
   @override
   void initState() {
@@ -47,6 +53,27 @@ class _MatchLineupScreenState extends State<MatchLineupScreen> {
     _future = _service.getLineup(widget.matchId, widget.teamId);
     _checkRole();
     _loadSuspendedPlayers();
+    _loadSeasonRules();
+  }
+
+  Future<void> _loadSeasonRules() async {
+    setState(() => _loadingRules = true);
+
+    try {
+      final match = await _matchesService.getMatch(widget.matchId);
+      final season = await _seasonsService.getById(match.seasonId);
+
+      if (!mounted) return;
+      setState(() {
+        _allowedStartingPlayers = season.gameNumberPlayers;
+      });
+    } catch (_) {
+      // Default 11 if season rules are unavailable.
+    } finally {
+      if (mounted) {
+        setState(() => _loadingRules = false);
+      }
+    }
   }
 
   Future<void> _loadSuspendedPlayers() async {
@@ -98,10 +125,13 @@ class _MatchLineupScreenState extends State<MatchLineupScreen> {
   void _toggleStarting(int index) {
     if (!_canEdit) return;
 
-    if (!_players[index].isStarting && _startingCount >= 11) {
+    if (!_players[index].isStarting &&
+        _startingCount >= _allowedStartingPlayers) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Maximo 11 jugadores titulares'),
+        SnackBar(
+          content: Text(
+            'Maximo $_allowedStartingPlayers jugadores titulares',
+          ),
         ),
       );
       return;
@@ -124,6 +154,17 @@ class _MatchLineupScreenState extends State<MatchLineupScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Agrega jugadores a la alineacion'),
+        ),
+      );
+      return;
+    }
+
+    if (_startingCount > _allowedStartingPlayers) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'No puedes marcar mas de $_allowedStartingPlayers titulares',
+          ),
         ),
       );
       return;
@@ -202,6 +243,7 @@ class _MatchLineupScreenState extends State<MatchLineupScreen> {
         teamName: widget.teamName,
         roster: roster,
         suspendedByPlayerId: _suspendedByPlayerId,
+        allowedStartingPlayers: _allowedStartingPlayers,
       ),
     );
 
@@ -348,7 +390,7 @@ class _MatchLineupScreenState extends State<MatchLineupScreen> {
           ),
           const SizedBox(height: 6),
           Text(
-            '$_startingCount / 11',
+            '$_startingCount / $_allowedStartingPlayers',
             style: const TextStyle(
               color: Colors.white70,
             ),
@@ -358,6 +400,16 @@ class _MatchLineupScreenState extends State<MatchLineupScreen> {
             _loadingSuspensions
                 ? 'Validando suspendidos...'
                 : 'Suspendidos: ${_suspendedByPlayerId.length}',
+            style: const TextStyle(
+              color: Colors.white60,
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _loadingRules
+                ? 'Cargando reglas de temporada...'
+                : 'Titulares maximos permitidos: $_allowedStartingPlayers',
             style: const TextStyle(
               color: Colors.white60,
               fontSize: 12,
@@ -499,11 +551,13 @@ class _BuildLineupDialog extends StatefulWidget {
   final String teamName;
   final List<TeamPlayer> roster;
   final Map<String, SuspendedPlayer> suspendedByPlayerId;
+  final int allowedStartingPlayers;
 
   const _BuildLineupDialog({
     required this.teamName,
     required this.roster,
     required this.suspendedByPlayerId,
+    required this.allowedStartingPlayers,
   });
 
   @override
@@ -558,11 +612,14 @@ class _BuildLineupDialogState extends State<_BuildLineupDialog> {
     }
 
     setState(() {
-      if (isStarting && !_startingPlayerIds.contains(player.playerId) &&
-          _startingPlayerIds.length >= 11) {
+      if (isStarting &&
+          !_startingPlayerIds.contains(player.playerId) &&
+          _startingPlayerIds.length >= widget.allowedStartingPlayers) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Maximo 11 jugadores titulares'),
+          SnackBar(
+            content: Text(
+              'Maximo ${widget.allowedStartingPlayers} jugadores titulares',
+            ),
           ),
         );
         return;
@@ -599,6 +656,17 @@ class _BuildLineupDialogState extends State<_BuildLineupDialog> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Selecciona al menos un jugador'),
+        ),
+      );
+      return;
+    }
+
+    if (_startingPlayerIds.length > widget.allowedStartingPlayers) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'No puedes marcar mas de ${widget.allowedStartingPlayers} titulares',
+          ),
         ),
       );
       return;

@@ -35,7 +35,7 @@ void handleSeasonNavTap(
   Widget destination;
   switch (tappedIndex) {
     case 0:
-      destination = HomeScreenSeason.basic(
+      destination = HomeScreenSeasonLoader(
         seasonId: seasonId,
         seasonName: seasonName,
       );
