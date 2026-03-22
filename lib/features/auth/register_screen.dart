@@ -21,7 +21,21 @@ class _RegisterScreenState extends State<RegisterScreen>{
   bool _obscureConfirmPassword = true;
   String? _error;
 
+  bool _isValidEmail(String email){
+    final emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
+    return emailRegex.hasMatch(email);
+  }
+
   void _register() async{
+    final email = _emailController.text.trim();
+
+    if(!_isValidEmail(email)){
+      setState(() {
+        _error = 'Ingresa un correo electronico valido';
+      });
+      return;
+    }
+
     if(_passwordController.text != _confirmPasswordController.text){
       setState(() {
         _error = 'Las contraseñas no son iguales';
@@ -36,7 +50,7 @@ class _RegisterScreenState extends State<RegisterScreen>{
 
     try{
       await _authService.register(
-        _emailController.text.trim(),
+        email,
         _passwordController.text.trim(),
         _fullNameController.text.trim(),
       );
@@ -91,6 +105,8 @@ class _RegisterScreenState extends State<RegisterScreen>{
 
                 TextField(
                   controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  autofillHints: const [AutofillHints.email],
                   decoration: const InputDecoration(
                     labelText: "Correo",
                   ),
