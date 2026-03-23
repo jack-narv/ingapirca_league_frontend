@@ -1,16 +1,20 @@
-# ingapirca_league_frontend
+# Ingapirca League Frontend
 
-A new Flutter project.
+## Forced update behavior
 
-## Getting Started
+At app startup, the client calls `GET /health/public` and reads:
 
-This project is a starting point for a Flutter application.
+- `app_update.force_update`
+- `app_update.min_android_version`
+- `app_update.min_ios_version`
+- `app_update.android_store_url`
+- `app_update.ios_store_url`
 
-A few resources to get you started if this is your first Flutter project:
+If the installed app version is lower than the required minimum for its platform, the app is blocked with a mandatory update screen. User cannot navigate into login/home until updated.
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+## Local run
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```bash
+flutter pub get
+flutter run
+```
