@@ -1,0 +1,11 @@
+.dart_tool
+.idea
+build
+ios
+android
+linux
+macos
+windows
+test
+.git
+.gitignore
