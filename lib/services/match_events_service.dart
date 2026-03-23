@@ -8,11 +8,13 @@ class MatchEventsService {
   static const String baseUrl = Environment.baseUrl;
   final AuthService _authService = AuthService();
 
-  Future<Map<String, String>> _headers() async {
+  Future<Map<String, String>> _headers({String? seasonId}) async {
     final token = await _authService.getToken();
     return {
       "Content-Type": "application/json",
       "Authorization": "Bearer $token",
+      if (seasonId != null && seasonId.trim().isNotEmpty)
+        "x-season-id": seasonId.trim(),
     };
   }
 
@@ -56,10 +58,13 @@ class MatchEventsService {
     }
   }
 
-  Future<void> deleteEvent(String eventId) async {
+  Future<void> deleteEvent(
+    String eventId, {
+    String? seasonId,
+  }) async {
     final response = await http.delete(
       Uri.parse("$baseUrl/match-events/$eventId"),
-      headers: await _headers(),
+      headers: await _headers(seasonId: seasonId),
     );
 
     if (response.statusCode != 200 && response.statusCode != 204) {

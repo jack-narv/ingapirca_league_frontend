@@ -153,7 +153,7 @@ class _MatchesListScreenState
           seasonName: widget.seasonName,
         ),
         floatingActionButton: FutureBuilder<bool>(
-          future: AuthService().isAdmin(),
+          future: AuthService().canManageTeams(),
           builder: (context, snapshot) {
             if (!snapshot.hasData || !snapshot.data!) {
               return const SizedBox();

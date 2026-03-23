@@ -86,6 +86,7 @@ class _CreatePlayerScreenState
       final player = await _service.createPlayer(
         firstName: _firstName.text.trim(),
         lastName: _lastName.text.trim(),
+        seasonId: widget.seasonId,
         nationality: _nationality.text.trim(),
         birthDate: _birthDate!,
         identityCard: identityCard,

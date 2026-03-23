@@ -190,7 +190,7 @@ class _SeasonsListScreenState extends State<SeasonsListScreen> {
       currentIndex: 0,
       onNavTap: _handleBottomNavTap,
       floatingActionButton: FutureBuilder<bool>(
-        future: AuthService().isAdmin(),
+        future: AuthService().canManageSeasons(),
         builder: (context, snapshot) {
           if (!snapshot.hasData || snapshot.data == false) {
             return const SizedBox();

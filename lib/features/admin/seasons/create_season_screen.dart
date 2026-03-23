@@ -40,6 +40,7 @@ class _CreateSeasonScreenState extends State<CreateSeasonScreen> {
   DateTime? _startDate;
   DateTime? _endDate;
   bool _isAdmin = false;
+  bool _canManageSeasons = false;
   bool _checkingRole = true;
   bool _loading = false;
   int _gameNumberPlayers = 11;
@@ -64,10 +65,12 @@ class _CreateSeasonScreenState extends State<CreateSeasonScreen> {
 
   Future<void> _loadRole() async {
     final isAdmin = await _authService.isAdmin();
+    final canManageSeasons = await _authService.canManageSeasons();
     if (!mounted) return;
 
     setState(() {
       _isAdmin = isAdmin;
+      _canManageSeasons = canManageSeasons;
       _checkingRole = false;
       if (_isAdmin && _categoryDrafts.isEmpty) {
         _categoryDrafts.add(_CategoryDraft());
@@ -114,6 +117,13 @@ class _CreateSeasonScreenState extends State<CreateSeasonScreen> {
   }
 
   void _createSeason() async {
+    if (!_canManageSeasons) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("No tienes permisos para esta accion")),
+      );
+      return;
+    }
+
     if (_nameController.text.isEmpty || _startDate == null || _endDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Completa todos los campos")),
@@ -154,7 +164,7 @@ class _CreateSeasonScreenState extends State<CreateSeasonScreen> {
         .where((name) => name.isNotEmpty)
         .toList();
 
-    if (categoryNames.isEmpty) {
+    if (_isAdmin && categoryNames.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Debes agregar al menos 1 categoria"),
@@ -386,6 +396,14 @@ class _CreateSeasonScreenState extends State<CreateSeasonScreen> {
               const Padding(
                 padding: EdgeInsets.only(bottom: 18),
                 child: Center(child: CircularProgressIndicator()),
+              ),
+            if (!_checkingRole && !_canManageSeasons)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 18),
+                child: Text(
+                  "No tienes permisos para crear temporadas.",
+                  style: TextStyle(color: Colors.white70),
+                ),
               ),
             if (!_checkingRole && _isAdmin) ...[
               const SizedBox(height: 10),

@@ -75,6 +75,7 @@ class PlayersService {
   Future<Player> createPlayer({
     required String firstName,
     required String lastName,
+    required String seasonId,
     required String nationality,
     required DateTime birthDate,
     required String identityCard,
@@ -86,6 +87,7 @@ class PlayersService {
       body: jsonEncode({
         "first_name": firstName,
         "last_name": lastName,
+        "season_id": seasonId,
         "date_of_birth": EcuadorTime.dateOnlyIso(birthDate),
         "nationality": nationality,
         "identity_card": identityCard,

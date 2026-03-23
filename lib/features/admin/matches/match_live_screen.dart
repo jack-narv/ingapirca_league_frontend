@@ -279,7 +279,10 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
 
     setState(() => _deletingEventId = eventId);
     try {
-      await _eventsService.deleteEvent(eventId);
+      await _eventsService.deleteEvent(
+        eventId,
+        seasonId: widget.seasonId,
+      );
       await _refreshTimelineAndScore();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

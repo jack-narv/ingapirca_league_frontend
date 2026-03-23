@@ -31,11 +31,15 @@ class AuthService {
     if (response.statusCode == 201 || response.statusCode == 200) {
       final data = jsonDecode(response.body);
       final auth = AuthResponse.fromJson(data);
+      final resolvedRoles = _resolveRolesForStorage(
+        auth.roles,
+        auth.accessToken,
+      );
 
       await _storage.write(key: _jwtKey, value: auth.accessToken);
       await _storage.write(
         key: _rolesKey,
-        value: auth.roles.join(','),
+        value: resolvedRoles.join(','),
       );
       if (auth.refreshToken != null && auth.refreshToken!.isNotEmpty) {
         await _storage.write(
@@ -174,13 +178,17 @@ class AuthService {
 
       final data = jsonDecode(response.body);
       final auth = AuthResponse.fromJson(data);
+      final resolvedRoles = _resolveRolesForStorage(
+        auth.roles,
+        auth.accessToken,
+      );
       if (auth.accessToken.isEmpty) {
         await logout();
         return false;
       }
 
       await _storage.write(key: _jwtKey, value: auth.accessToken);
-      await _storage.write(key: _rolesKey, value: auth.roles.join(','));
+      await _storage.write(key: _rolesKey, value: resolvedRoles.join(','));
       if (auth.refreshToken != null && auth.refreshToken!.isNotEmpty) {
         await _storage.write(key: _refreshTokenKey, value: auth.refreshToken!);
       }
@@ -241,16 +249,76 @@ class AuthService {
   }
 
   Future<Set<String>> _getRoleSet() async {
+    final fromStorage = <String>{};
     final rawRoles = await _storage.read(key: _rolesKey);
-    if (rawRoles == null || rawRoles.trim().isEmpty) {
-      return <String>{};
+    if (rawRoles != null && rawRoles.trim().isNotEmpty) {
+      fromStorage.addAll(
+        rawRoles
+            .split(',')
+            .map((role) => role.trim().toUpperCase())
+            .where((role) => role.isNotEmpty),
+      );
     }
 
-    return rawRoles
-        .split(',')
-        .map((role) => role.trim().toUpperCase())
-        .where((role) => role.isNotEmpty)
+    // Fallback: derive roles from JWT payload if secure-storage role key is stale/missing.
+    final fromToken = <String>{};
+    final token = await _storage.read(key: _jwtKey);
+    final payload = _decodeJwtPayload(token ?? '');
+    final payloadRoles = payload?['roles'];
+    if (payloadRoles is List) {
+      fromToken.addAll(
+        payloadRoles
+            .map((role) => role.toString().trim().toUpperCase())
+            .where((role) => role.isNotEmpty),
+      );
+    } else if (payloadRoles is String && payloadRoles.trim().isNotEmpty) {
+      fromToken.addAll(
+        payloadRoles
+            .split(',')
+            .map((role) => role.trim().toUpperCase())
+            .where((role) => role.isNotEmpty),
+      );
+    }
+
+    return {
+      ...fromStorage,
+      ...fromToken,
+    };
+  }
+
+  List<String> _resolveRolesForStorage(
+    List<String> responseRoles,
+    String accessToken,
+  ) {
+    final normalizedResponse = responseRoles
+        .map((r) => r.trim().toUpperCase())
+        .where((r) => r.isNotEmpty)
         .toSet();
+
+    if (normalizedResponse.isNotEmpty) {
+      return normalizedResponse.toList();
+    }
+
+    final payload = _decodeJwtPayload(accessToken);
+    final payloadRoles = payload?['roles'];
+    final fromToken = <String>{};
+
+    if (payloadRoles is List) {
+      fromToken.addAll(
+        payloadRoles
+            .map((r) => r.toString().trim().toUpperCase())
+            .where((r) => r.isNotEmpty),
+      );
+    } else if (payloadRoles is String && payloadRoles.trim().isNotEmpty) {
+      fromToken.addAll(
+        payloadRoles
+            .split(',')
+            .map((r) => r.trim().toUpperCase())
+            .where((r) => r.isNotEmpty),
+      );
+    }
+
+    return fromToken.toList();
   }
 
   Future<bool> isAdmin() async {
@@ -263,8 +331,15 @@ class AuthService {
     return roles.contains('ADMIN') || roles.contains('LEAGUE_ADMIN');
   }
 
+  Future<bool> canManageSeasons() async {
+    final roles = await _getRoleSet();
+    return roles.contains('ADMIN');
+  }
+
   Future<bool> canManageMatchFlow() async {
     final roles = await _getRoleSet();
-    return roles.contains('ADMIN') || roles.contains('VOCAL');
+    return roles.contains('ADMIN') ||
+        roles.contains('LEAGUE_ADMIN') ||
+        roles.contains('VOCAL');
   }
 }
