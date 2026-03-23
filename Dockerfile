@@ -17,4 +17,7 @@ FROM nginx:alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/build/web /usr/share/nginx/html
 
-EXPOSE 80
+ENV PORT=8080
+EXPOSE 8080
+
+CMD ["/bin/sh", "-c", "sed -i \"s/__PORT__/${PORT}/g\" /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
