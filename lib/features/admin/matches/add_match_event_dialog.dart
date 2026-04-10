@@ -113,119 +113,180 @@ class _AddMatchEventDialogState
     }
   }
 
+  String _playerLabel(MatchLineupPlayer player) {
+    return "${player.playerName} (#${player.shirtNumber})";
+  }
+
+  Widget _ellipsisText(String value) {
+    return Text(
+      value,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      softWrap: false,
+    );
+  }
+
+  Widget _menuItemText(String value) {
+    return Text(
+      value,
+      maxLines: 3,
+      softWrap: true,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final currentLineup = _currentLineup;
+    final relatedPlayers = currentLineup
+        .where((p) => p.playerId != _playerId)
+        .toList();
+
     return AlertDialog(
       backgroundColor: const Color(0xFF1E293B),
       title: const Text("Anadir Evento"),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            keyboardType: TextInputType.number,
-            decoration:
-                const InputDecoration(labelText: "Minuto"),
-            onChanged: (v) =>
-                _minute = int.tryParse(v) ?? 0,
-          ),
-          const SizedBox(height: 16),
-          DropdownButtonFormField<String>(
-            initialValue: _teamId,
-            items: [
-              DropdownMenuItem(
-                value: widget.homeTeamId,
-                child: Text(widget.homeTeamName),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                keyboardType: TextInputType.number,
+                decoration:
+                    const InputDecoration(labelText: "Minuto"),
+                onChanged: (v) =>
+                    _minute = int.tryParse(v) ?? 0,
               ),
-              DropdownMenuItem(
-                value: widget.awayTeamId,
-                child: Text(widget.awayTeamName),
-              ),
-            ],
-            decoration:
-                const InputDecoration(labelText: "Equipo"),
-            onChanged: (value) {
-              if (value == null) return;
-              setState(() {
-                _teamId = value;
-                _hydratePlayers();
-              });
-            },
-          ),
-          const SizedBox(height: 16),
-          DropdownButtonFormField<String>(
-            initialValue: _playerId,
-            items: _currentLineup
-                .map(
-                  (p) => DropdownMenuItem(
-                    value: p.playerId,
-                    child: Text(
-                        "${p.playerName} (#${p.shirtNumber})"),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                isExpanded: true,
+                initialValue: _teamId,
+                items: [
+                  DropdownMenuItem(
+                    value: widget.homeTeamId,
+                    child: _ellipsisText(widget.homeTeamName),
                   ),
-                )
-                .toList(),
-            decoration:
-                const InputDecoration(labelText: "Jugador"),
-            onChanged: (v) =>
-                setState(() => _playerId = v),
-          ),
-          const SizedBox(height: 16),
-          DropdownButtonFormField<String>(
-            initialValue: _type,
-            items: const [
-              DropdownMenuItem(
-                  value: 'GOAL', child: Text('Gol')),
-              DropdownMenuItem(
-                  value: 'YELLOW',
-                  child: Text('Amarilla')),
-              DropdownMenuItem(
-                  value: 'RED_DIRECT',
-                  child: Text('Roja Directa')),
-              DropdownMenuItem(
-                  value: 'DOBLE_YELLOW_RED',
-                  child: Text('Roja por 2 Amarillas')),
-              DropdownMenuItem(
-                  value: 'OWN_GOAL',
-                  child: Text('Autogol')),
-              DropdownMenuItem(
-                  value: 'SUB_IN',
-                  child: Text('Sustitucion (Entra)')),
-              DropdownMenuItem(
-                  value: 'SUB_OUT',
-                  child: Text('Sustitucion (Sale)')),
-            ],
-            decoration:
-                const InputDecoration(labelText: "Tipo"),
-            onChanged: (v) => setState(() {
-              _type = v ?? 'GOAL';
-              if (_type != 'SUB_IN' &&
-                  _type != 'SUB_OUT') {
-                _relatedPlayerId = null;
-              }
-            }),
-          ),
-          if (_type == 'SUB_IN' || _type == 'SUB_OUT') ...[
-            const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              initialValue: _relatedPlayerId,
-              items: _currentLineup
-                  .where(
-                      (p) => p.playerId != _playerId)
-                  .map(
-                    (p) => DropdownMenuItem(
-                      value: p.playerId,
-                      child: Text(
-                          "${p.playerName} (#${p.shirtNumber})"),
-                    ),
-                  )
-                  .toList(),
-              decoration: const InputDecoration(
-                labelText: "Jugador relacionado",
+                  DropdownMenuItem(
+                    value: widget.awayTeamId,
+                    child: _ellipsisText(widget.awayTeamName),
+                  ),
+                ],
+                selectedItemBuilder: (_) => [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: _ellipsisText(widget.homeTeamName),
+                  ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: _ellipsisText(widget.awayTeamName),
+                  ),
+                ],
+                decoration:
+                    const InputDecoration(labelText: "Equipo"),
+                onChanged: (value) {
+                  if (value == null) return;
+                  setState(() {
+                    _teamId = value;
+                    _hydratePlayers();
+                  });
+                },
               ),
-              onChanged: (v) => setState(
-                  () => _relatedPlayerId = v),
-            ),
-          ],
-        ],
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                isExpanded: true,
+                itemHeight: null,
+                menuMaxHeight: 420,
+                initialValue: _playerId,
+                items: currentLineup
+                    .map(
+                      (p) => DropdownMenuItem(
+                        value: p.playerId,
+                        child: _menuItemText(_playerLabel(p)),
+                      ),
+                    )
+                    .toList(),
+                selectedItemBuilder: (_) => currentLineup
+                    .map(
+                      (p) => Align(
+                        alignment: Alignment.centerLeft,
+                        child: _ellipsisText(_playerLabel(p)),
+                      ),
+                    )
+                    .toList(),
+                decoration:
+                    const InputDecoration(labelText: "Jugador"),
+                onChanged: (v) =>
+                    setState(() => _playerId = v),
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                isExpanded: true,
+                initialValue: _type,
+                items: const [
+                  DropdownMenuItem(
+                      value: 'GOAL', child: Text('Gol')),
+                  DropdownMenuItem(
+                      value: 'YELLOW',
+                      child: Text('Amarilla')),
+                  DropdownMenuItem(
+                      value: 'RED_DIRECT',
+                      child: Text('Roja Directa')),
+                  DropdownMenuItem(
+                      value: 'DOBLE_YELLOW_RED',
+                      child: Text('Roja por 2 Amarillas')),
+                  DropdownMenuItem(
+                      value: 'OWN_GOAL',
+                      child: Text('Autogol')),
+                  DropdownMenuItem(
+                      value: 'SUB_IN',
+                      child: Text('Sustitucion (Entra)')),
+                  DropdownMenuItem(
+                      value: 'SUB_OUT',
+                      child: Text('Sustitucion (Sale)')),
+                ],
+                decoration:
+                    const InputDecoration(labelText: "Tipo"),
+                onChanged: (v) => setState(() {
+                  _type = v ?? 'GOAL';
+                  if (_type != 'SUB_IN' &&
+                      _type != 'SUB_OUT') {
+                    _relatedPlayerId = null;
+                  }
+                }),
+              ),
+              if (_type == 'SUB_IN' || _type == 'SUB_OUT') ...[
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  isExpanded: true,
+                  itemHeight: null,
+                  menuMaxHeight: 420,
+                  initialValue: _relatedPlayerId,
+                  items: relatedPlayers
+                      .map(
+                        (p) => DropdownMenuItem(
+                          value: p.playerId,
+                          child: _menuItemText(_playerLabel(p)),
+                        ),
+                      )
+                      .toList(),
+                  selectedItemBuilder: (_) => relatedPlayers
+                      .map(
+                        (p) => Align(
+                          alignment: Alignment.centerLeft,
+                          child: _ellipsisText(_playerLabel(p)),
+                        ),
+                      )
+                      .toList(),
+                  decoration: const InputDecoration(
+                    labelText: "Jugador relacionado",
+                  ),
+                  onChanged: (v) => setState(
+                      () => _relatedPlayerId = v),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
       actions: [
         TextButton(

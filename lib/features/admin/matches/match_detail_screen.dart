@@ -426,6 +426,9 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
   }
 
   Future<void> _startMatch() async {
+    final confirmed = await _confirmStartMatch();
+    if (!confirmed) return;
+
     setState(() => _loading = true);
     try {
       await _service.startMatch(_match.id);
@@ -453,8 +456,103 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
   }
 
   Future<void> _cancelMatch() async {
-    await _service.cancelMatch(_match.id, null);
-    await _refresh();
+    final confirmed = await _confirmCancelMatch();
+    if (!confirmed) return;
+
+    setState(() => _loading = true);
+    try {
+      await _service.cancelMatch(_match.id, null);
+      await _refresh();
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<bool> _confirmStartMatch() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Confirmar inicio'),
+        content: const Text(
+          '¿Deseas iniciar este partido ahora? El estado cambiará a "JUGANDO".',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('No'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Si, iniciar'),
+          ),
+        ],
+      ),
+    );
+
+    return confirmed ?? false;
+  }
+
+  Future<bool> _confirmCancelMatch() async {
+    int secondsLeft = 10;
+    Timer? timer;
+    bool timerStarted = false;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            if (!timerStarted) {
+              timerStarted = true;
+              timer = Timer.periodic(
+                const Duration(seconds: 1),
+                (t) {
+                  if (secondsLeft <= 1) {
+                    t.cancel();
+                    setDialogState(() => secondsLeft = 0);
+                  } else {
+                    setDialogState(() => secondsLeft -= 1);
+                  }
+                },
+              );
+            }
+
+            return AlertDialog(
+              title: const Text('Confirmar cancelación'),
+              content: Text(
+                '¿Seguro que deseas cancelar este partido?\n\nEsta acción lo marcará como "CANCELADO".\n\nPodrás confirmar en $secondsLeft segundos.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    timer?.cancel();
+                    Navigator.pop(dialogContext, false);
+                  },
+                  child: const Text('Volver'),
+                ),
+                ElevatedButton(
+                  onPressed: secondsLeft == 0
+                      ? () {
+                          timer?.cancel();
+                          Navigator.pop(dialogContext, true);
+                        }
+                      : null,
+                  child: Text(
+                    secondsLeft == 0
+                        ? 'Si, cancelar'
+                        : 'Espera ${secondsLeft}s',
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    timer?.cancel();
+    return confirmed ?? false;
   }
 
   @override
@@ -477,10 +575,12 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
           child: Column(
             children: [
               _buildScoreboard(),
-              if (_showAwardsSummary()) ...[
-                const SizedBox(height: 8),
-                _buildAwardsSummary(),
-              ],
+              // Temporarily hidden by request:
+              // Keep MVP/Arquero summary code for future use.
+              // if (_showAwardsSummary()) ...[
+              //   const SizedBox(height: 8),
+              //   _buildAwardsSummary(),
+              // ],
               const SizedBox(height: 16),
               _buildAdminActions(),
               const SizedBox(height: 12),
@@ -666,7 +766,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
               ),
             if (_match.status != 'PLAYED')
               TextButton(
-                onPressed: _cancelMatch,
+                onPressed: _loading ? null : _cancelMatch,
                 child: const Text('Cancelar'),
               ),
             if (_match.status == 'PLAYING')

@@ -714,8 +714,7 @@ class _BuildLineupDialogState extends State<_BuildLineupDialog> {
                       children: [
                         Text(
                           '${player.player.firstName} ${player.player.lastName}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                          softWrap: true,
                         ),
                         Text(
                           '#${player.shirtNumber} - ${player.position}',

@@ -497,6 +497,16 @@ class _FinalizeMatchScreenState
         candidateIds.contains(_selectedBestGoalkeeperId)
             ? _selectedBestGoalkeeperId
             : null;
+    String? bestPlayerLabel;
+    String? bestGoalkeeperLabel;
+    for (final c in candidates) {
+      if (c.playerId == safeBestPlayerId) {
+        bestPlayerLabel = c.label;
+      }
+      if (c.playerId == safeBestGoalkeeperId) {
+        bestGoalkeeperLabel = c.label;
+      }
+    }
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -524,10 +534,25 @@ class _FinalizeMatchScreenState
             key: ValueKey('best-player-${safeBestPlayerId ?? 'none'}'),
             initialValue: safeBestPlayerId,
             isExpanded: true,
+            itemHeight: null,
+            menuMaxHeight: 420,
             items: candidates
                 .map(
                   (c) => DropdownMenuItem<String>(
                     value: c.playerId,
+                    child: Text(
+                      c.label,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      softWrap: true,
+                    ),
+                  ),
+                )
+                .toList(),
+            selectedItemBuilder: (_) => candidates
+                .map(
+                  (c) => Align(
+                    alignment: Alignment.centerLeft,
                     child: Text(
                       c.label,
                       maxLines: 1,
@@ -549,6 +574,16 @@ class _FinalizeMatchScreenState
                       : 'Mejor jugador',
             ),
           ),
+          if (bestPlayerLabel != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              bestPlayerLabel,
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 12,
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
           DropdownButtonFormField<String>(
             key: ValueKey(
@@ -556,10 +591,25 @@ class _FinalizeMatchScreenState
             ),
             initialValue: safeBestGoalkeeperId,
             isExpanded: true,
+            itemHeight: null,
+            menuMaxHeight: 420,
             items: candidates
                 .map(
                   (c) => DropdownMenuItem<String>(
                     value: c.playerId,
+                    child: Text(
+                      c.label,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      softWrap: true,
+                    ),
+                  ),
+                )
+                .toList(),
+            selectedItemBuilder: (_) => candidates
+                .map(
+                  (c) => Align(
+                    alignment: Alignment.centerLeft,
                     child: Text(
                       c.label,
                       maxLines: 1,
@@ -583,6 +633,16 @@ class _FinalizeMatchScreenState
                       : 'Mejor arquero',
             ),
           ),
+          if (bestGoalkeeperLabel != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              bestGoalkeeperLabel,
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 12,
+              ),
+            ),
+          ],
         ],
       ),
     );
