@@ -5,6 +5,7 @@ import '../../../models/match.dart';
 import '../../../models/season_category.dart';
 import '../../../models/standings.dart';
 import '../../../models/team.dart';
+import '../../../services/auth_service.dart';
 import '../../../services/matches_service.dart';
 import '../../../services/seasons_service.dart';
 import '../../../services/standings_service.dart';
@@ -29,6 +30,7 @@ class _StandingsScreenState extends State<StandingsScreen> {
   final SeasonsService _seasonsService = SeasonsService();
   final TeamsService _teamsService = TeamsService();
   final MatchesService _matchesService = MatchesService();
+  final AuthService _authService = AuthService();
 
   late Future<List<SeasonCategory>> _categoriesFuture;
   late Future<List<Standing>> _standingsFuture;
@@ -36,6 +38,8 @@ class _StandingsScreenState extends State<StandingsScreen> {
 
   String? _selectedCategoryId;
   String? _selectedEliminationCategoryId;
+  bool _isAdmin = false;
+  bool _isRefreshingStandings = false;
 
   final ScrollController _scrollController = ScrollController(
     keepScrollOffset: false,
@@ -44,6 +48,7 @@ class _StandingsScreenState extends State<StandingsScreen> {
   @override
   void initState() {
     super.initState();
+    _checkAdminRole();
     _categoriesFuture = _seasonsService.getCategoriesBySeason(widget.seasonId);
     _standingsFuture = _categoriesFuture.then((categories) {
       if (categories.isEmpty) {
@@ -75,6 +80,14 @@ class _StandingsScreenState extends State<StandingsScreen> {
   void dispose() {
     _scrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _checkAdminRole() async {
+    final isAdmin = await _authService.isAdmin();
+    if (!mounted) return;
+    setState(() {
+      _isAdmin = isAdmin;
+    });
   }
 
   void _applyCategory(String categoryId) {
@@ -192,6 +205,45 @@ class _StandingsScreenState extends State<StandingsScreen> {
   void _scrollToTop() {
     if (!_scrollController.hasClients) return;
     _scrollController.jumpTo(0);
+  }
+
+  Future<void> _refreshStandingsManually() async {
+    final categoryId = _selectedCategoryId;
+    if (categoryId == null || _isRefreshingStandings) return;
+
+    setState(() {
+      _isRefreshingStandings = true;
+    });
+
+    try {
+      await _standingsService.recalculateSeason(
+        widget.seasonId,
+        categoryId: categoryId,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _standingsFuture = _loadStandingsForCategory(categoryId);
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Tabla actualizada correctamente'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo actualizar la tabla: $e'),
+        ),
+      );
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _isRefreshingStandings = false;
+      });
+    }
   }
 
   Widget _buildTeamCell(Standing row) {
@@ -431,13 +483,29 @@ class _StandingsScreenState extends State<StandingsScreen> {
                 children: [
                   const Icon(Icons.leaderboard, color: Color(0xFF22D3EE)),
                   const SizedBox(width: 10),
-                  Text(
-                    rows.isEmpty ? "Sin datos aun" : "${rows.length} equipos",
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white70,
+                  Expanded(
+                    child: Text(
+                      rows.isEmpty ? "Sin datos aun" : "${rows.length} equipos",
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white70,
+                      ),
                     ),
                   ),
+                  if (_isAdmin)
+                    FilledButton.icon(
+                      onPressed: _isRefreshingStandings
+                          ? null
+                          : _refreshStandingsManually,
+                      icon: _isRefreshingStandings
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.refresh),
+                      label: const Text('Actualizar tabla'),
+                    ),
                 ],
               ),
             ),
