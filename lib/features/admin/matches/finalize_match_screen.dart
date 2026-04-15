@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../models/match.dart';
 import '../../../models/match_lineup.dart';
+import '../../../models/match_observations.dart';
+import '../../../models/match_referee_observation.dart';
 import '../../../models/referees.dart';
 import '../../../services/match_lineups_service.dart';
 import '../../../services/match_referee_observations_service.dart';
@@ -28,6 +30,11 @@ class FinalizeMatchScreen extends StatefulWidget {
 
 class _FinalizeMatchScreenState
     extends State<FinalizeMatchScreen> {
+  // Season toggle: keep feature code, hide in UI for current season.
+  static const bool _showMatchAwardsSection = false;
+  // Season toggle: keep feature code/services, hide ratings UI for current season.
+  static const bool _showRefereeRatingsSection = false;
+
   final MatchesService _matchesService = MatchesService();
   final MatchLineupsService _lineupsService =
       MatchLineupsService();
@@ -81,6 +88,7 @@ class _FinalizeMatchScreenState
     _awayObservationController = TextEditingController();
     _loadLineups();
     _loadReferees();
+    _loadExistingObservations();
   }
 
   @override
@@ -150,6 +158,69 @@ class _FinalizeMatchScreenState
       );
     } finally {
       if (mounted) setState(() => _refereesLoading = false);
+    }
+  }
+
+  Future<void> _loadExistingObservations() async {
+    try {
+      final results = await Future.wait<dynamic>([
+        _matchesService.getMatch(widget.match.id),
+        _matchesService.getTeamObservationsByMatch(widget.match.id),
+        _matchRefereeObservationsService.getByMatch(widget.match.id),
+      ]);
+
+      if (!mounted) return;
+
+      final latestMatch = results[0] as Match;
+      final teamObservations = results[1] as List<MatchObservation>;
+      final refereeObservations =
+          results[2] as List<MatchRefereeObservation>;
+
+      MatchObservation? latestHome;
+      MatchObservation? latestAway;
+      for (final observation in teamObservations) {
+        if (observation.teamId == widget.match.homeTeamId) {
+          if (latestHome == null ||
+              observation.submittedAt.isAfter(latestHome.submittedAt)) {
+            latestHome = observation;
+          }
+        } else if (observation.teamId == widget.match.awayTeamId) {
+          if (latestAway == null ||
+              observation.submittedAt.isAfter(latestAway.submittedAt)) {
+            latestAway = observation;
+          }
+        }
+      }
+
+      final latestRefereeById = <String, MatchRefereeObservation>{};
+      for (final observation in refereeObservations) {
+        final existing = latestRefereeById[observation.refereeId];
+        final existingAt = existing?.submittedAt;
+        final currentAt = observation.submittedAt;
+        if (existing == null ||
+            (currentAt != null &&
+                (existingAt == null || currentAt.isAfter(existingAt)))) {
+          latestRefereeById[observation.refereeId] = observation;
+        }
+      }
+
+      setState(() {
+        _adminObservationController.text = latestMatch.observations ?? '';
+        if (latestHome != null) {
+          _homeObservationController.text = latestHome.observation;
+          _homeSubmittedBy = latestHome.submittedBy;
+        }
+        if (latestAway != null) {
+          _awayObservationController.text = latestAway.observation;
+          _awaySubmittedBy = latestAway.submittedBy;
+        }
+        for (final entry in latestRefereeById.entries) {
+          _refereeObservationControllerFor(entry.key).text =
+              entry.value.observation;
+        }
+      });
+    } catch (_) {
+      // Keep screen usable even if prefill fails.
     }
   }
 
@@ -224,31 +295,42 @@ class _FinalizeMatchScreenState
       return;
     }
 
-    final allPlayers = _matchAwardCandidates();
-    if (allPlayers.isEmpty) {
+    if (adminObservation.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'No hay alineaciones registradas. Registra alineaciones para seleccionar mejor jugador y mejor arquero.',
-          ),
+          content: Text('La observacion del vocal es obligatoria'),
         ),
       );
       return;
     }
 
-    if (_selectedBestPlayerId == null ||
-        _selectedBestGoalkeeperId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Selecciona mejor jugador y mejor arquero del partido.',
+    if (_showMatchAwardsSection) {
+      final allPlayers = _matchAwardCandidates();
+      if (allPlayers.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'No hay alineaciones registradas. Registra alineaciones para seleccionar mejor jugador y mejor arquero.',
+            ),
           ),
-        ),
-      );
-      return;
+        );
+        return;
+      }
+
+      if (_selectedBestPlayerId == null ||
+          _selectedBestGoalkeeperId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Selecciona mejor jugador y mejor arquero del partido.',
+            ),
+          ),
+        );
+        return;
+      }
     }
 
-    if (_matchReferees.isNotEmpty) {
+    if (_showRefereeRatingsSection && _matchReferees.isNotEmpty) {
       for (final assignment in _matchReferees) {
         final homeKey = _ratingKey(
           widget.match.homeTeamId,
@@ -273,6 +355,24 @@ class _FinalizeMatchScreenState
       }
     }
 
+    if (_matchReferees.isNotEmpty) {
+      for (final assignment in _matchReferees) {
+        final refereeObservation = _refereeObservationControllerFor(
+          assignment.refereeId,
+        ).text.trim();
+        if (refereeObservation.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Debes registrar observaciones para todos los arbitros',
+              ),
+            ),
+          );
+          return;
+        }
+      }
+    }
+
     setState(() => _loading = true);
     try {
       await _matchesService.finishMatch(
@@ -280,8 +380,8 @@ class _FinalizeMatchScreenState
         homeScore,
         awayScore,
         adminObservation.isEmpty ? null : adminObservation,
-        _selectedBestPlayerId,
-        _selectedBestGoalkeeperId,
+        _showMatchAwardsSection ? _selectedBestPlayerId : null,
+        _showMatchAwardsSection ? _selectedBestGoalkeeperId : null,
       );
 
       if (homeObservation.isNotEmpty) {
@@ -312,25 +412,27 @@ class _FinalizeMatchScreenState
           assignment.refereeId,
         );
 
-        await _refereeRatingsService.create(
-          matchId: widget.match.id,
-          refereeId: assignment.refereeId,
-          teamId: widget.match.homeTeamId,
-          rating: _ratingsByKey[homeKey]!,
-          comment: _commentControllerFor(homeKey).text.trim().isEmpty
-              ? null
-              : _commentControllerFor(homeKey).text.trim(),
-        );
+        if (_showRefereeRatingsSection) {
+          await _refereeRatingsService.create(
+            matchId: widget.match.id,
+            refereeId: assignment.refereeId,
+            teamId: widget.match.homeTeamId,
+            rating: _ratingsByKey[homeKey]!,
+            comment: _commentControllerFor(homeKey).text.trim().isEmpty
+                ? null
+                : _commentControllerFor(homeKey).text.trim(),
+          );
 
-        await _refereeRatingsService.create(
-          matchId: widget.match.id,
-          refereeId: assignment.refereeId,
-          teamId: widget.match.awayTeamId,
-          rating: _ratingsByKey[awayKey]!,
-          comment: _commentControllerFor(awayKey).text.trim().isEmpty
-              ? null
-              : _commentControllerFor(awayKey).text.trim(),
-        );
+          await _refereeRatingsService.create(
+            matchId: widget.match.id,
+            refereeId: assignment.refereeId,
+            teamId: widget.match.awayTeamId,
+            rating: _ratingsByKey[awayKey]!,
+            comment: _commentControllerFor(awayKey).text.trim().isEmpty
+                ? null
+                : _commentControllerFor(awayKey).text.trim(),
+          );
+        }
 
         final refereeObservation = _refereeObservationControllerFor(
           assignment.refereeId,
@@ -375,20 +477,24 @@ class _FinalizeMatchScreenState
         children: [
           _buildScoreSection(),
           const SizedBox(height: 12),
-          _buildBestAwardsSection(),
-          const SizedBox(height: 12),
+          if (_showMatchAwardsSection) ...[
+            _buildBestAwardsSection(),
+            const SizedBox(height: 12),
+          ],
           _buildAdminObservationSection(),
           const SizedBox(height: 12),
-          _buildRefereeRatingsSection(
-            teamName: widget.homeTeamName,
-            teamId: widget.match.homeTeamId,
-          ),
-          const SizedBox(height: 12),
-          _buildRefereeRatingsSection(
-            teamName: widget.awayTeamName,
-            teamId: widget.match.awayTeamId,
-          ),
-          const SizedBox(height: 12),
+          if (_showRefereeRatingsSection) ...[
+            _buildRefereeRatingsSection(
+              teamName: widget.homeTeamName,
+              teamId: widget.match.homeTeamId,
+            ),
+            const SizedBox(height: 12),
+            _buildRefereeRatingsSection(
+              teamName: widget.awayTeamName,
+              teamId: widget.match.awayTeamId,
+            ),
+            const SizedBox(height: 12),
+          ],
           _buildRefereeObservationsSection(),
           const SizedBox(height: 12),
           _buildTeamObservationSection(
@@ -690,7 +796,7 @@ class _FinalizeMatchScreenState
           ),
           const SizedBox(height: 8),
           const Text(
-            'Opcional',
+            'Obligatorio',
             style: TextStyle(color: Colors.white60),
           ),
           const SizedBox(height: 8),
@@ -829,7 +935,7 @@ class _FinalizeMatchScreenState
           ),
           const SizedBox(height: 8),
           const Text(
-            'Opcional',
+            'Obligatorio',
             style: TextStyle(color: Colors.white60),
           ),
           const SizedBox(height: 10),
@@ -875,8 +981,7 @@ class _FinalizeMatchScreenState
                         minLines: 1,
                         maxLines: 3,
                         decoration: const InputDecoration(
-                          hintText:
-                              'Escribe la observacion del arbitro (opcional)',
+                          hintText: 'Escribe la observacion del arbitro',
                         ),
                       ),
                     ],
@@ -897,6 +1002,12 @@ class _FinalizeMatchScreenState
     required TextEditingController controller,
     required bool loading,
   }) {
+    final validPlayerIds = players.map((p) => p.playerId).toSet();
+    final safeSelectedPlayerId =
+        validPlayerIds.contains(selectedPlayerId)
+            ? selectedPlayerId
+            : null;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -920,7 +1031,7 @@ class _FinalizeMatchScreenState
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
-            initialValue: selectedPlayerId,
+            initialValue: safeSelectedPlayerId,
             isExpanded: true,
             items: players.map((p) {
               final role = p.isStarting ? 'Titular' : 'Suplente';
