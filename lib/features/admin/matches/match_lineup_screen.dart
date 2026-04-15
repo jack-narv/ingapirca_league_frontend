@@ -242,6 +242,7 @@ class _MatchLineupScreenState extends State<MatchLineupScreen> {
       builder: (_) => _BuildLineupDialog(
         teamName: widget.teamName,
         roster: roster,
+        initialLineup: _players,
         suspendedByPlayerId: _suspendedByPlayerId,
         allowedStartingPlayers: _allowedStartingPlayers,
       ),
@@ -550,12 +551,14 @@ class _MatchLineupScreenState extends State<MatchLineupScreen> {
 class _BuildLineupDialog extends StatefulWidget {
   final String teamName;
   final List<TeamPlayer> roster;
+  final List<MatchLineupPlayer> initialLineup;
   final Map<String, SuspendedPlayer> suspendedByPlayerId;
   final int allowedStartingPlayers;
 
   const _BuildLineupDialog({
     required this.teamName,
     required this.roster,
+    required this.initialLineup,
     required this.suspendedByPlayerId,
     required this.allowedStartingPlayers,
   });
@@ -567,6 +570,30 @@ class _BuildLineupDialog extends StatefulWidget {
 class _BuildLineupDialogState extends State<_BuildLineupDialog> {
   final Set<String> _selectedPlayerIds = {};
   final Set<String> _startingPlayerIds = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _hydrateFromInitialLineup();
+  }
+
+  void _hydrateFromInitialLineup() {
+    final rosterIds = widget.roster.map((player) => player.playerId).toSet();
+
+    for (final player in widget.initialLineup) {
+      final canUsePlayer =
+          rosterIds.contains(player.playerId) &&
+          !widget.suspendedByPlayerId.containsKey(player.playerId);
+      if (!canUsePlayer) {
+        continue;
+      }
+
+      _selectedPlayerIds.add(player.playerId);
+      if (player.isStarting) {
+        _startingPlayerIds.add(player.playerId);
+      }
+    }
+  }
 
   void _toggleSelected(TeamPlayer player, bool selected) {
     final isSuspended =

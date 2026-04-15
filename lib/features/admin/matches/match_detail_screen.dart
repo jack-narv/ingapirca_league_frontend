@@ -992,59 +992,91 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
           final teamNameResolved = teamName.isNotEmpty
               ? teamName
               : _teamNameOrEmpty((e['team_id'] ?? '').toString());
+          final eventTeamId = (e['team_id'] ?? '').toString();
+          final isAwayTeamEvent = eventTeamId == _match.awayTeamId;
+          final textAlign =
+              isAwayTeamEvent ? TextAlign.end : TextAlign.start;
+          final columnAlignment = isAwayTeamEvent
+              ? CrossAxisAlignment.end
+              : CrossAxisAlignment.start;
           final icon = _eventIcon(type);
           final color = _eventColor(type);
 
-          return Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              color: const Color(0xFF1A2332),
-            ),
-            child: Row(
+          final details = Expanded(
+            child: Column(
+              crossAxisAlignment: columnAlignment,
               children: [
-                _buildEventMarker(type, icon, color),
-                const SizedBox(width: 12),
                 Text(
-                  "$minute'",
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                  ),
+                  typeLabel,
+                  textAlign: textAlign,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        typeLabel,
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        shirt == null || shirt.isEmpty
-                            ? playerName
-                            : '$playerName (#$shirt)',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white70),
-                      ),
-                      if (teamNameResolved.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          teamNameResolved,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white54,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
+                const SizedBox(height: 4),
+                Text(
+                  shirt == null || shirt.isEmpty
+                      ? playerName
+                      : '$playerName (#$shirt)',
+                  maxLines: 2,
+                  textAlign: textAlign,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white70),
                 ),
+                if (teamNameResolved.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    teamNameResolved,
+                    maxLines: 1,
+                    textAlign: textAlign,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white54,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
               ],
+            ),
+          );
+
+          final minuteWidget = Text(
+            "$minute'",
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+            ),
+          );
+
+          final markerWidget = _buildEventMarker(type, icon, color);
+
+          return Align(
+            alignment: isAwayTeamEvent
+                ? Alignment.centerRight
+                : Alignment.centerLeft,
+            child: FractionallySizedBox(
+              widthFactor: 0.94,
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  color: const Color(0xFF1A2332),
+                ),
+                child: Row(
+                  children: isAwayTeamEvent
+                      ? [
+                          details,
+                          const SizedBox(width: 12),
+                          minuteWidget,
+                          const SizedBox(width: 12),
+                          markerWidget,
+                        ]
+                      : [
+                          markerWidget,
+                          const SizedBox(width: 12),
+                          minuteWidget,
+                          const SizedBox(width: 12),
+                          details,
+                        ],
+                ),
+              ),
             ),
           );
         },
