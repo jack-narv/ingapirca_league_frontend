@@ -415,7 +415,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
       ...raw,
       'event_type':
           (raw['event_type'] ?? raw['type'] ?? 'EVENT').toString(),
-      'minute': int.tryParse((raw['minute'] ?? 0).toString()) ?? 0,
+      'minute': (raw['minute'] ?? '').toString().trim(),
       'team_id': inferredTeamId,
       'team_name': rawTeamName.isNotEmpty ? rawTeamName : mappedTeamName,
       'player_name': playerName.isNotEmpty
@@ -452,6 +452,26 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
 
     if (finalized == true) {
       await _refresh();
+    }
+  }
+
+  Future<void> _endFirstHalf() async {
+    setState(() => _loading = true);
+    try {
+      await _service.endFirstHalf(_match.id);
+      await _refresh();
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _startSecondHalf() async {
+    setState(() => _loading = true);
+    try {
+      await _service.startSecondHalf(_match.id);
+      await _refresh();
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -644,8 +664,8 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
             children: [
               Text(
                 _statusLabelEs(_match.status),
-                style: const TextStyle(
-                  color: Colors.orange,
+                style: TextStyle(
+                  color: _statusTextColor(_match.status),
                   fontWeight: FontWeight.w600,
                   fontSize: 18,
                 ),
@@ -671,7 +691,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
                 style: TextStyle(
                   fontSize: 34,
                   fontWeight: FontWeight.bold,
-                  color: _match.status == 'PLAYING'
+                  color: _isPlayingStatus(_match.status)
                       ? Colors.greenAccent
                       : Colors.white,
                 ),
@@ -759,17 +779,28 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
                 onPressed: _loading ? null : _startMatch,
                 child: const Text('Iniciar'),
               ),
-            if (_match.status == 'PLAYING')
+            if (_match.status == 'PLAYING_SECOND_HALF')
               ElevatedButton(
                 onPressed: _finishMatchDialog,
                 child: const Text('Finalizar'),
+              ),
+            if (_match.status == 'PLAYING_FIRST_HALF')
+              ElevatedButton(
+                onPressed: _loading ? null : _endFirstHalf,
+                child: const Text('TERMINAR PRIMER TIEMPO'),
+              ),
+            if (_match.status == 'HALF_TIME')
+              ElevatedButton(
+                onPressed: _loading ? null : _startSecondHalf,
+                child: const Text('EMPEZAR SEGUNDO TIEMPO'),
               ),
             if (_match.status != 'PLAYED')
               TextButton(
                 onPressed: _loading ? null : _cancelMatch,
                 child: const Text('Cancelar'),
               ),
-            if (_match.status == 'PLAYING')
+            if (_match.status == 'PLAYING_FIRST_HALF' ||
+                _match.status == 'PLAYING_SECOND_HALF')
               OutlinedButton(
                 onPressed: () {
                   Navigator.push(
@@ -983,7 +1014,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
         separatorBuilder: (_, index) => const SizedBox(height: 10),
         itemBuilder: (context, index) {
           final e = _events[index];
-          final minute = e['minute']?.toString() ?? '0';
+          final minute = (e['minute'] ?? '').toString().trim();
           final type = (e['event_type'] ?? 'EVENT').toString();
           final typeLabel = _eventLabelEs(type);
           final playerName = (e['player_name'] ?? '').toString();
@@ -1038,12 +1069,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
             ),
           );
 
-          final minuteWidget = Text(
-            "$minute'",
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-            ),
-          );
+          final minuteWidget = _buildMinuteBadge(minute);
 
           final markerWidget = _buildEventMarker(type, icon, color);
 
@@ -1784,6 +1810,56 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
     );
   }
 
+  Widget _buildMinuteBadge(String minuteRaw) {
+    final minuteText = minuteRaw.trim();
+    final match = RegExp(r'^(\d+)\s*([12])t$', caseSensitive: false)
+        .firstMatch(minuteText);
+
+    final displayMain = match != null
+        ? "${match.group(1)}'"
+        : (minuteText.isEmpty ? '--' : minuteText);
+    final displayHalf = match != null ? "${match.group(2)}t" : null;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.12),
+          width: 1,
+        ),
+      ),
+      child: RichText(
+        text: TextSpan(
+          children: [
+            TextSpan(
+              text: displayMain,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                fontSize: 16,
+                letterSpacing: 0.2,
+              ),
+            ),
+            if (displayHalf != null) ...[
+              const TextSpan(text: '  '),
+              TextSpan(
+                text: displayHalf,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontStyle: FontStyle.italic,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildTenStarRating(int rating) {
     final safeRating = rating.clamp(0, 10);
 
@@ -1840,6 +1916,12 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
     switch (status.toUpperCase()) {
       case 'SCHEDULED':
         return 'POR JUGAR';
+      case 'HALF_TIME':
+        return 'DESCANSO';
+      case 'PLAYING_FIRST_HALF':
+        return 'JUGANDO PRIMER TIEMPO';
+      case 'PLAYING_SECOND_HALF':
+        return 'JUGANDO SEGUNDO TIEMPO';
       case 'PLAYING':
         return 'JUGANDO';
       case 'PLAYED':
@@ -1850,4 +1932,22 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
         return status;
     }
   }
+
+  Color _statusTextColor(String status) {
+    if (_isPlayingStatus(status)) {
+      return Colors.green;
+    }
+    if (status.toUpperCase() == 'HALF_TIME') {
+      return const Color(0xFFE879F9);
+    }
+    return Colors.orange;
+  }
+
+  bool _isPlayingStatus(String status) {
+    final normalized = status.toUpperCase();
+    return normalized == 'PLAYING' ||
+        normalized == 'PLAYING_FIRST_HALF' ||
+        normalized == 'PLAYING_SECOND_HALF';
+  }
 }
+

@@ -54,6 +54,9 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
   List<MatchLineupPlayer> _awayLineup = [];
 
   StreamSubscription? _connSub;
+  StreamSubscription? _startSub;
+  StreamSubscription? _halfTimeSub;
+  StreamSubscription? _secondHalfSub;
   StreamSubscription? _scoreSub;
   StreamSubscription? _eventSub;
   StreamSubscription? _finishSub;
@@ -73,6 +76,18 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
     _connSub = _socketService.connected$.listen((ok) {
       if (!mounted) return;
       setState(() => _connected = ok);
+    });
+
+    _startSub = _socketService.matchStarted$.listen((_) {
+      _setMatchStatus('PLAYING_FIRST_HALF');
+    });
+
+    _halfTimeSub = _socketService.halfTime$.listen((_) {
+      _setMatchStatus('HALF_TIME');
+    });
+
+    _secondHalfSub = _socketService.secondHalfStarted$.listen((_) {
+      _setMatchStatus('PLAYING_SECOND_HALF');
     });
 
     _scoreSub = _socketService.score$.listen((data) {
@@ -96,10 +111,33 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
 
     _finishSub = _socketService.finished$.listen((data) {
       if (!mounted) return;
+      _setMatchStatus('PLAYED');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Partido finalizado')),
       );
       Navigator.pop(context);
+    });
+  }
+
+  void _setMatchStatus(String status) {
+    if (!mounted || _match == null) return;
+    setState(() {
+      _match = Match(
+        id: _match!.id,
+        seasonId: _match!.seasonId,
+        categoryId: _match!.categoryId,
+        journal: _match!.journal,
+        homeTeamId: _match!.homeTeamId,
+        awayTeamId: _match!.awayTeamId,
+        venueId: _match!.venueId,
+        matchDate: _match!.matchDate,
+        status: status,
+        homeScore: _homeScore,
+        awayScore: _awayScore,
+        observations: _match!.observations,
+        bestPlayerId: _match!.bestPlayerId,
+        bestGoalkeeperId: _match!.bestGoalkeeperId,
+      );
     });
   }
 
@@ -219,6 +257,7 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
         awayTeamId: _match!.awayTeamId,
         homeTeamName: _homeTeam?.name ?? 'Local',
         awayTeamName: _awayTeam?.name ?? 'Visitante',
+        matchStatus: _match!.status,
         homeLineup: _homeLineup,
         awayLineup: _awayLineup,
       ),
@@ -234,6 +273,7 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
     final updatedMatch = await _matchesService.getMatch(widget.matchId);
     if (!mounted) return;
     setState(() {
+      _match = updatedMatch;
       _homeScore = updatedMatch.homeScore;
       _awayScore = updatedMatch.awayScore;
       _events
@@ -312,6 +352,9 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
   void dispose() {
     _socketService.leaveMatch(widget.matchId);
     _connSub?.cancel();
+    _startSub?.cancel();
+    _halfTimeSub?.cancel();
+    _secondHalfSub?.cancel();
     _scoreSub?.cancel();
     _eventSub?.cancel();
     _finishSub?.cancel();
@@ -332,7 +375,7 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
         seasonId: widget.seasonId,
         seasonName: widget.seasonName,
       ),
-      floatingActionButton: _canAddEvents
+      floatingActionButton: _canAddEvents && _isPlayingHalf(_match?.status)
           ? FloatingActionButton(
               onPressed: _addEvent,
               child: const Icon(Icons.add),
@@ -440,6 +483,15 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
             style: TextStyle(
               color: Colors.white70,
               fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _statusLabelEs(_match?.status ?? ''),
+            style: TextStyle(
+              color: _statusTextColor(_match?.status ?? ''),
+              fontWeight: FontWeight.w700,
+              fontSize: 14,
             ),
           ),
           const SizedBox(height: 12),
@@ -611,6 +663,7 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
 
     final icon = _eventIcon(type);
     final color = _eventColor(type);
+    final minuteLabel = _formatMinuteLabel(minute);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -635,7 +688,7 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  minute == null ? typeLabel : "$typeLabel • $minute'",
+                  minuteLabel.isEmpty ? typeLabel : "$typeLabel • $minuteLabel",
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                   ),
@@ -827,5 +880,49 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
         borderRadius: BorderRadius.circular(1.5),
       ),
     );
+  }
+
+  bool _isPlayingHalf(String? status) {
+    final normalized = (status ?? '').toUpperCase();
+    return normalized == 'PLAYING_FIRST_HALF' ||
+        normalized == 'PLAYING_SECOND_HALF';
+  }
+
+  String _statusLabelEs(String status) {
+    switch (status.toUpperCase()) {
+      case 'PLAYING_FIRST_HALF':
+        return 'JUGANDO PRIMER TIEMPO';
+      case 'PLAYING_SECOND_HALF':
+        return 'JUGANDO SEGUNDO TIEMPO';
+      case 'HALF_TIME':
+        return 'DESCANSO';
+      case 'PLAYED':
+        return 'TERMINADO';
+      case 'SCHEDULED':
+        return 'POR JUGAR';
+      case 'CANCELED':
+        return 'CANCELADO';
+      default:
+        return status;
+    }
+  }
+
+  Color _statusTextColor(String status) {
+    final normalized = status.toUpperCase();
+    if (normalized == 'PLAYING_FIRST_HALF' ||
+        normalized == 'PLAYING_SECOND_HALF') {
+      return Colors.greenAccent;
+    }
+    if (normalized == 'HALF_TIME') return Colors.amber;
+    if (normalized == 'PLAYED') return Colors.blueAccent;
+    if (normalized == 'CANCELED') return Colors.redAccent;
+    return Colors.white70;
+  }
+
+  String _formatMinuteLabel(String? minute) {
+    final value = (minute ?? '').trim();
+    if (value.isEmpty) return '';
+    if (RegExp(r'^\d+$').hasMatch(value)) return "$value'";
+    return value;
   }
 }

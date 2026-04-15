@@ -578,7 +578,7 @@ class _CardEventRow {
   final String playerId;
   final String playerName;
   final int? shirtNumber;
-  final int minute;
+  final String minute;
   final String eventType;
 
   _CardEventRow({
@@ -608,7 +608,7 @@ class _SuspensionRow {
   final int? shirtNumber;
   final int matchesAffected;
   final String reason;
-  final int minute;
+  final String minute;
 
   _SuspensionRow({
     required this.matchId,
@@ -720,14 +720,14 @@ class _SanctionsViewModel {
     cardEvents.sort((a, b) {
       final dateSort = b.matchDate.compareTo(a.matchDate);
       if (dateSort != 0) return dateSort;
-      return b.minute.compareTo(a.minute);
+      return _minuteSortValue(b.minute).compareTo(_minuteSortValue(a.minute));
     });
 
     final suspensions = _computeSuspensions(cardEvents);
     suspensions.sort((a, b) {
       final dateSort = b.matchDate.compareTo(a.matchDate);
       if (dateSort != 0) return dateSort;
-      return b.minute.compareTo(a.minute);
+      return _minuteSortValue(b.minute).compareTo(_minuteSortValue(a.minute));
     });
 
     final categoriesSorted = [...data.categories]
@@ -754,7 +754,7 @@ class _SanctionsViewModel {
       ..sort((a, b) {
         final dateSort = a.matchDate.compareTo(b.matchDate);
         if (dateSort != 0) return dateSort;
-        return a.minute.compareTo(b.minute);
+        return _minuteSortValue(a.minute).compareTo(_minuteSortValue(b.minute));
       });
 
     final seasonYellowCountByPlayer = <String, int>{};
@@ -854,6 +854,20 @@ class _SanctionsViewModel {
     }
 
     return suspensions;
+  }
+
+  static int _minuteSortValue(String minuteText) {
+    final value = minuteText.trim();
+    final match = RegExp(r'^(\d+)\s*([12])t$', caseSensitive: false).firstMatch(value);
+
+    if (match == null) {
+      final numeric = int.tryParse(value);
+      return numeric ?? 9999;
+    }
+
+    final minute = int.tryParse(match.group(1) ?? '') ?? 0;
+    final half = int.tryParse(match.group(2) ?? '') ?? 1;
+    return half == 1 ? minute : 1000 + minute;
   }
 
 }

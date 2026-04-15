@@ -35,7 +35,7 @@ class MatchEventsService {
     required String matchId,
     required String teamId,
     required String playerId,
-    required int minute,
+    required String minute,
     required String eventType,
     String? relatedPlayerId,
   }) async {

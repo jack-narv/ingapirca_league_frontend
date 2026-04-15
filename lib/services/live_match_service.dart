@@ -17,6 +17,12 @@ class LiveMatchSocketService {
   final _matchStartedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get matchStarted$ => _matchStartedCtrl.stream;
 
+  final _halfTimeCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get halfTime$ => _halfTimeCtrl.stream;
+
+  final _secondHalfStartedCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get secondHalfStarted$ => _secondHalfStartedCtrl.stream;
+
   final _scoreCtrl = StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get score$ => _scoreCtrl.stream;
 
@@ -63,6 +69,16 @@ class LiveMatchSocketService {
       if (data is Map) _matchStartedCtrl.add(Map<String, dynamic>.from(data));
     });
 
+    _socket!.on('match_half_time', (data) {
+      if (data is Map) _halfTimeCtrl.add(Map<String, dynamic>.from(data));
+    });
+
+    _socket!.on('match_second_half_started', (data) {
+      if (data is Map) {
+        _secondHalfStartedCtrl.add(Map<String, dynamic>.from(data));
+      }
+    });
+
     _socket!.on('score_updated', (data) {
       if (data is Map) _scoreCtrl.add(Map<String, dynamic>.from(data));
     });
@@ -93,6 +109,8 @@ class LiveMatchSocketService {
 
     _connectedCtrl.close();
     _matchStartedCtrl.close();
+    _halfTimeCtrl.close();
+    _secondHalfStartedCtrl.close();
     _scoreCtrl.close();
     _eventCtrl.close();
     _finishedCtrl.close();

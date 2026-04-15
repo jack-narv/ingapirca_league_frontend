@@ -195,6 +195,32 @@ class MatchesService {
     }
   }
 
+  Future<void> endFirstHalf(String matchId) async {
+    final res = await http.patch(
+      Uri.parse("$baseUrl/matches/$matchId/half-time"),
+      headers: await _headers(),
+    );
+
+    if (res.statusCode != 200) {
+      throw Exception(
+        _extractErrorMessage(res, "Error finalizando el primer tiempo"),
+      );
+    }
+  }
+
+  Future<void> startSecondHalf(String matchId) async {
+    final res = await http.patch(
+      Uri.parse("$baseUrl/matches/$matchId/second-half"),
+      headers: await _headers(),
+    );
+
+    if (res.statusCode != 200) {
+      throw Exception(
+        _extractErrorMessage(res, "Error iniciando el segundo tiempo"),
+      );
+    }
+  }
+
   // ============================
   // FINISH MATCH
   // ============================
