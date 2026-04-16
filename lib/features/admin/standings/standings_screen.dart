@@ -294,72 +294,81 @@ class _StandingsScreenState extends State<StandingsScreen> {
           ),
         ],
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: DataTable(
-          headingRowHeight: 44,
-          dataRowMinHeight: 48,
-          dataRowMaxHeight: 56,
-          columnSpacing: 16,
-          headingTextStyle: const TextStyle(
-            color: Colors.white70,
-            fontWeight: FontWeight.w700,
-            fontSize: 12,
-          ),
-          columns: const [
-            DataColumn(label: Text('#')),
-            DataColumn(label: Text('Equipo')),
-            DataColumn(numeric: true, label: Text('Pts')),
-            DataColumn(numeric: true, label: Text('PJ')),
-            DataColumn(numeric: true, label: Text('G')),
-            DataColumn(numeric: true, label: Text('E')),
-            DataColumn(numeric: true, label: Text('P')),
-            DataColumn(numeric: true, label: Text('GF')),
-            DataColumn(numeric: true, label: Text('GC')),
-            DataColumn(numeric: true, label: Text('DG')),
-          ],
-          rows: List.generate(rows.length, (index) {
-            final row = rows[index];
-            final isTopFour = index < 4;
-            final isBottomTwo = rows.length >= 2 && index >= rows.length - 2;
-            final rankColor = isTopFour
-                ? const Color(0xFF22D3EE)
-                : isBottomTwo
-                    ? const Color(0xFFFF6B6B)
-                    : Colors.white70;
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+              child: DataTable(
+                headingRowHeight: 44,
+                dataRowMinHeight: 48,
+                dataRowMaxHeight: 56,
+                horizontalMargin: 8,
+                columnSpacing: 10,
+                headingTextStyle: const TextStyle(
+                  color: Colors.white70,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
+                columns: const [
+                  DataColumn(label: Text('#')),
+                  DataColumn(label: Text('Equipo')),
+                  DataColumn(numeric: true, label: Text('Pts')),
+                  DataColumn(numeric: true, label: Text('PJ')),
+                  DataColumn(numeric: true, label: Text('G')),
+                  DataColumn(numeric: true, label: Text('E')),
+                  DataColumn(numeric: true, label: Text('P')),
+                  DataColumn(numeric: true, label: Text('GF')),
+                  DataColumn(numeric: true, label: Text('GC')),
+                  DataColumn(numeric: true, label: Text('DG')),
+                ],
+                rows: List.generate(rows.length, (index) {
+                  final row = rows[index];
+                  final isTopFour = index < 4;
+                  final isBottomTwo = rows.length >= 2 && index >= rows.length - 2;
+                  final rankColor = isTopFour
+                      ? const Color(0xFF22D3EE)
+                      : isBottomTwo
+                          ? const Color(0xFFFF6B6B)
+                          : Colors.white70;
 
-            return DataRow(
-              cells: [
-                DataCell(
-                  Text(
-                    "${index + 1}",
-                    style: TextStyle(
-                      color: rankColor,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                DataCell(SizedBox(width: 180, child: _buildTeamCell(row))),
-                DataCell(
-                  Text(
-                    "${row.points}",
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF00E676),
-                    ),
-                  ),
-                ),
-                DataCell(Text("${row.played}")),
-                DataCell(Text("${row.wins}")),
-                DataCell(Text("${row.draws}")),
-                DataCell(Text("${row.losses}")),
-                DataCell(Text("${row.goalsFor}")),
-                DataCell(Text("${row.goalsAgainst}")),
-                DataCell(Text("${row.goalDifference}")),
-              ],
-            );
-          }),
-        ),
+                  return DataRow(
+                    cells: [
+                      DataCell(
+                        Text(
+                          "${index + 1}",
+                          style: TextStyle(
+                            color: rankColor,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      DataCell(SizedBox(width: 120, child: _buildTeamCell(row))),
+                      DataCell(
+                        Text(
+                          "${row.points}",
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF00E676),
+                          ),
+                        ),
+                      ),
+                      DataCell(Text("${row.played}")),
+                      DataCell(Text("${row.wins}")),
+                      DataCell(Text("${row.draws}")),
+                      DataCell(Text("${row.losses}")),
+                      DataCell(Text("${row.goalsFor}")),
+                      DataCell(Text("${row.goalsAgainst}")),
+                      DataCell(Text("${row.goalDifference}")),
+                    ],
+                  );
+                }),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

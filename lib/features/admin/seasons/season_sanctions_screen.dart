@@ -323,6 +323,27 @@ class _SeasonSanctionsScreenState extends State<SeasonSanctionsScreen> {
             }
 
             final rows = snapshot.data ?? <CardsSummary>[];
+            final tableRows = rows
+                .map(
+                  (item) => _CardsSummaryRow(
+                    playerId: item.playerId,
+                    playerName: item.fullName.isEmpty ? item.playerId : item.fullName,
+                    teamName: (item.teamName ?? '').trim().isNotEmpty
+                        ? (item.teamName ?? '').trim()
+                        : _resolvePlayerTeamName(
+                            vm,
+                            playerId: item.playerId,
+                            shirtNumber: item.shirtNumber,
+                            sourceRows: vm.cardEvents,
+                            selectedCategoryId: _cardsCategoryId,
+                            selectedTeamId: _cardsTeamId,
+                          ),
+                    shirtNumber: item.shirtNumber,
+                    yellowCards: item.yellowCards,
+                    redDirectCards: item.redDirectCards,
+                  ),
+                )
+                .toList();
             final yellowCount =
                 rows.fold<int>(0, (acc, item) => acc + item.yellowCards);
             final redDirectCount = rows.fold<int>(
@@ -369,7 +390,7 @@ class _SeasonSanctionsScreenState extends State<SeasonSanctionsScreen> {
                     title: "Resumen de tarjetas",
                     subtitle:
                         "Suma de YELLOW y RED_DIRECT por jugador",
-                    child: _CardsSummaryTable(entries: rows),
+                    child: _CardsSummaryTable(entries: tableRows),
                   ),
               ],
             );
@@ -472,6 +493,16 @@ class _SeasonSanctionsScreenState extends State<SeasonSanctionsScreen> {
                   (s) => _SuspensionSummaryRow(
                     playerId: s.playerId,
                     playerName: s.fullName.isEmpty ? s.playerId : s.fullName,
+                    teamName: (s.teamName ?? '').trim().isNotEmpty
+                        ? (s.teamName ?? '').trim()
+                        : _resolvePlayerTeamName(
+                            vm,
+                            playerId: s.playerId,
+                            shirtNumber: s.shirtNumber,
+                            sourceRows: vm.suspensions,
+                            selectedCategoryId: _suspensionsCategoryId,
+                            selectedTeamId: _suspensionsTeamId,
+                          ),
                     shirtNumber: s.shirtNumber,
                     totalMatchesSuspended: s.pendingMatchesSuspended,
                   ),
@@ -536,6 +567,77 @@ class _SeasonSanctionsScreenState extends State<SeasonSanctionsScreen> {
 
     return teams.where((t) => t.categoryId == selectedCategoryId).toList();
   }
+
+  String _resolvePlayerTeamName(
+    _SanctionsViewModel vm, {
+    required String playerId,
+    required int? shirtNumber,
+    required Iterable<_HasTeamPlayerCategory> sourceRows,
+    required String? selectedCategoryId,
+    required String? selectedTeamId,
+  }) {
+    if (selectedTeamId != null && selectedTeamId.isNotEmpty) {
+      final selectedTeamMatches =
+          vm.teams.where((t) => t.id == selectedTeamId).toList();
+      if (selectedTeamMatches.isNotEmpty) {
+        return selectedTeamMatches.first.name;
+      }
+    }
+
+    final teamByFrequency = <String, int>{};
+    for (final row in sourceRows) {
+      if (row.playerId != playerId) continue;
+      if (shirtNumber != null && row.shirtNumber != null && row.shirtNumber != shirtNumber) {
+        continue;
+      }
+      if (selectedCategoryId != null && row.categoryId != selectedCategoryId) {
+        continue;
+      }
+      if (selectedTeamId != null && row.teamId != selectedTeamId) {
+        continue;
+      }
+      final name = row.teamName.trim();
+      if (name.isEmpty || name == 'Sin equipo') continue;
+      teamByFrequency[name] = (teamByFrequency[name] ?? 0) + 1;
+    }
+    if (teamByFrequency.isNotEmpty) {
+      final ordered = teamByFrequency.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+      return ordered.first.key;
+    }
+
+    final playerMatches = vm.players.where((p) => p.id == playerId).toList();
+    if (playerMatches.isEmpty) {
+      return "Sin equipo";
+    }
+    final player = playerMatches.first;
+
+    final teamsById = {for (final t in vm.teams) t.id: t};
+    final candidateNames = player.teamInfo
+        .where((info) {
+          if (info.teamId.isEmpty) return false;
+          if (shirtNumber != null && info.shirtNumber != shirtNumber) return false;
+          final team = teamsById[info.teamId];
+          if (team == null) {
+            return selectedTeamId == null || selectedTeamId == info.teamId;
+          }
+          if (selectedCategoryId == null) return true;
+          return team.categoryId == selectedCategoryId;
+        })
+        .map((info) => info.teamName.trim().isNotEmpty
+            ? info.teamName
+            : (teamsById[info.teamId]?.name ?? ''))
+        .where((name) => name.trim().isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+
+    if (candidateNames.isEmpty) {
+      return "Sin equipo";
+    }
+
+    return candidateNames.join(', ');
+  }
 }
 
 class _SanctionsData {
@@ -568,7 +670,15 @@ class _LineupShirtSnapshot {
   });
 }
 
-class _CardEventRow {
+abstract class _HasTeamPlayerCategory {
+  String get playerId;
+  String get teamId;
+  String get teamName;
+  String get categoryId;
+  int? get shirtNumber;
+}
+
+class _CardEventRow implements _HasTeamPlayerCategory {
   final String matchId;
   final DateTime matchDate;
   final String categoryId;
@@ -578,7 +688,7 @@ class _CardEventRow {
   final String playerId;
   final String playerName;
   final int? shirtNumber;
-  final int minute;
+  final String minute;
   final String eventType;
 
   _CardEventRow({
@@ -596,7 +706,7 @@ class _CardEventRow {
   });
 }
 
-class _SuspensionRow {
+class _SuspensionRow implements _HasTeamPlayerCategory {
   final String matchId;
   final DateTime matchDate;
   final String categoryId;
@@ -608,7 +718,7 @@ class _SuspensionRow {
   final int? shirtNumber;
   final int matchesAffected;
   final String reason;
-  final int minute;
+  final String minute;
 
   _SuspensionRow({
     required this.matchId,
@@ -629,12 +739,14 @@ class _SuspensionRow {
 class _SuspensionSummaryRow {
   final String playerId;
   final String playerName;
+  final String teamName;
   final int? shirtNumber;
   final int totalMatchesSuspended;
 
   _SuspensionSummaryRow({
     required this.playerId,
     required this.playerName,
+    required this.teamName,
     required this.shirtNumber,
     required this.totalMatchesSuspended,
   });
@@ -643,6 +755,7 @@ class _SuspensionSummaryRow {
 class _SanctionsViewModel {
   final List<SeasonCategory> categories;
   final List<Team> teams;
+  final List<Player> players;
   final List<_CardEventRow> cardEvents;
   final List<_SuspensionRow> suspensions;
   final Map<String, int> cardTypeCounts;
@@ -650,6 +763,7 @@ class _SanctionsViewModel {
   _SanctionsViewModel({
     required this.categories,
     required this.teams,
+    required this.players,
     required this.cardEvents,
     required this.suspensions,
     required this.cardTypeCounts,
@@ -720,14 +834,14 @@ class _SanctionsViewModel {
     cardEvents.sort((a, b) {
       final dateSort = b.matchDate.compareTo(a.matchDate);
       if (dateSort != 0) return dateSort;
-      return b.minute.compareTo(a.minute);
+      return _minuteSortValue(b.minute).compareTo(_minuteSortValue(a.minute));
     });
 
     final suspensions = _computeSuspensions(cardEvents);
     suspensions.sort((a, b) {
       final dateSort = b.matchDate.compareTo(a.matchDate);
       if (dateSort != 0) return dateSort;
-      return b.minute.compareTo(a.minute);
+      return _minuteSortValue(b.minute).compareTo(_minuteSortValue(a.minute));
     });
 
     final categoriesSorted = [...data.categories]
@@ -737,6 +851,7 @@ class _SanctionsViewModel {
     return _SanctionsViewModel(
       categories: categoriesSorted,
       teams: teamsSorted,
+      players: data.players,
       cardEvents: cardEvents,
       suspensions: suspensions,
       cardTypeCounts: cardTypeCounts,
@@ -754,7 +869,7 @@ class _SanctionsViewModel {
       ..sort((a, b) {
         final dateSort = a.matchDate.compareTo(b.matchDate);
         if (dateSort != 0) return dateSort;
-        return a.minute.compareTo(b.minute);
+        return _minuteSortValue(a.minute).compareTo(_minuteSortValue(b.minute));
       });
 
     final seasonYellowCountByPlayer = <String, int>{};
@@ -856,6 +971,38 @@ class _SanctionsViewModel {
     return suspensions;
   }
 
+  static int _minuteSortValue(String minuteText) {
+    final value = minuteText.trim();
+    final match = RegExp(r'^(\d+)\s*([12])t$', caseSensitive: false).firstMatch(value);
+
+    if (match == null) {
+      final numeric = int.tryParse(value);
+      return numeric ?? 9999;
+    }
+
+    final minute = int.tryParse(match.group(1) ?? '') ?? 0;
+    final half = int.tryParse(match.group(2) ?? '') ?? 1;
+    return half == 1 ? minute : 1000 + minute;
+  }
+
+}
+
+class _CardsSummaryRow {
+  final String playerId;
+  final String playerName;
+  final String teamName;
+  final int? shirtNumber;
+  final int yellowCards;
+  final int redDirectCards;
+
+  _CardsSummaryRow({
+    required this.playerId,
+    required this.playerName,
+    required this.teamName,
+    required this.shirtNumber,
+    required this.yellowCards,
+    required this.redDirectCards,
+  });
 }
 
 class _SectionTitle extends StatelessWidget {
@@ -1007,44 +1154,63 @@ class _ModernTableCard extends StatelessWidget {
 }
 
 class _CardsSummaryTable extends StatelessWidget {
-  final List<CardsSummary> entries;
+  final List<_CardsSummaryRow> entries;
 
   const _CardsSummaryTable({required this.entries});
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        headingRowHeight: 36,
-        dataRowMinHeight: 36,
-        dataRowMaxHeight: 46,
-        columns: const [
-          DataColumn(label: Text("Jugador")),
-          DataColumn(label: Text("Dorsal")),
-          DataColumn(label: Text("YELLOW")),
-          DataColumn(label: Text("RED_DIRECT")),
-        ],
-        rows: entries.map((entry) {
-          final name = entry.fullName.isEmpty ? entry.playerId : entry.fullName;
-          return DataRow(
-            cells: [
-              DataCell(
-                SizedBox(
-                  width: 200,
-                  child: Text(
-                    name,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ),
-              DataCell(Text(entry.shirtNumber?.toString() ?? "--")),
-              DataCell(Text("${entry.yellowCards}")),
-              DataCell(Text("${entry.redDirectCards}")),
-            ],
-          );
-        }).toList(),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: constraints.maxWidth),
+            child: DataTable(
+              headingRowHeight: 36,
+              dataRowMinHeight: 36,
+              dataRowMaxHeight: 46,
+              horizontalMargin: 8,
+              columnSpacing: 10,
+              columns: const [
+                DataColumn(label: Text("Jugador")),
+                DataColumn(label: Text("Equipo")),
+                DataColumn(label: Text("Dorsal")),
+                DataColumn(label: Text("YELLOW")),
+                DataColumn(label: Text("RED_DIRECT")),
+              ],
+              rows: entries.map((entry) {
+                return DataRow(
+                  cells: [
+                    DataCell(
+                      SizedBox(
+                        width: 105,
+                        child: Text(
+                          entry.playerName,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                    DataCell(
+                      SizedBox(
+                        width: 95,
+                        child: Text(
+                          entry.teamName,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                    DataCell(Text(entry.shirtNumber?.toString() ?? "--")),
+                    DataCell(Text('${entry.yellowCards}')),
+                    DataCell(Text('${entry.redDirectCards}')),
+                  ],
+                );
+              }).toList(),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -1056,35 +1222,55 @@ class _SuspensionsSummaryTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        headingRowHeight: 36,
-        dataRowMinHeight: 36,
-        dataRowMaxHeight: 46,
-        columns: const [
-          DataColumn(label: Text("Jugador")),
-          DataColumn(label: Text("Dorsal")),
-          DataColumn(label: Text("Pendientes")),
-        ],
-        rows: entries.map((entry) {
-          return DataRow(
-            cells: [
-              DataCell(
-                SizedBox(
-                  width: 200,
-                  child: Text(
-                    entry.playerName,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ),
-              DataCell(Text(entry.shirtNumber?.toString() ?? "--")),
-              DataCell(Text("${entry.totalMatchesSuspended}")),
-            ],
-          );
-        }).toList(),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: constraints.maxWidth),
+            child: DataTable(
+              headingRowHeight: 36,
+              dataRowMinHeight: 36,
+              dataRowMaxHeight: 46,
+              horizontalMargin: 8,
+              columnSpacing: 10,
+              columns: const [
+                DataColumn(label: Text("Jugador")),
+                DataColumn(label: Text("Equipo")),
+                DataColumn(label: Text("Dorsal")),
+                DataColumn(label: Text("Pendientes")),
+              ],
+              rows: entries.map((entry) {
+                return DataRow(
+                  cells: [
+                    DataCell(
+                      SizedBox(
+                        width: 110,
+                        child: Text(
+                          entry.playerName,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                    DataCell(
+                      SizedBox(
+                        width: 95,
+                        child: Text(
+                          entry.teamName,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                    DataCell(Text(entry.shirtNumber?.toString() ?? "--")),
+                    DataCell(Text("${entry.totalMatchesSuspended}")),
+                  ],
+                );
+              }).toList(),
+            ),
+          ),
+        );
+      },
     );
   }
 }

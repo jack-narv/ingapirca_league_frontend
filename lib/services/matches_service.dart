@@ -195,6 +195,51 @@ class MatchesService {
     }
   }
 
+  Future<void> endFirstHalf(String matchId) async {
+    final res = await http.patch(
+      Uri.parse("$baseUrl/matches/$matchId/half-time"),
+      headers: await _headers(),
+    );
+
+    if (res.statusCode != 200) {
+      throw Exception(
+        _extractErrorMessage(res, "Error finalizando el primer tiempo"),
+      );
+    }
+  }
+
+  Future<void> startSecondHalf(String matchId) async {
+    final res = await http.patch(
+      Uri.parse("$baseUrl/matches/$matchId/second-half"),
+      headers: await _headers(),
+    );
+
+    if (res.statusCode != 200) {
+      throw Exception(
+        _extractErrorMessage(res, "Error iniciando el segundo tiempo"),
+      );
+    }
+  }
+
+  Future<void> updateAdminObservationDuringMatch(
+    String matchId,
+    String? observations,
+  ) async {
+    final res = await http.patch(
+      Uri.parse("$baseUrl/matches/$matchId/observation"),
+      headers: await _headers(),
+      body: jsonEncode({
+        "observations": observations,
+      }),
+    );
+
+    if (res.statusCode != 200) {
+      throw Exception(
+        _extractErrorMessage(res, "Error actualizando observacion del vocal"),
+      );
+    }
+  }
+
   // ============================
   // FINISH MATCH
   // ============================

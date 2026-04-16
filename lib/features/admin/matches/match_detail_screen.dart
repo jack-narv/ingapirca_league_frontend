@@ -40,6 +40,9 @@ class MatchDetailScreen extends StatefulWidget {
 }
 
 class _MatchDetailScreenState extends State<MatchDetailScreen> {
+  // Season toggle: keep ratings code/services, hide block in UI for current season.
+  static const bool _showRefereeRatingsInObservations = false;
+
   final MatchesService _service = MatchesService();
   final TeamsService _teamsService = TeamsService();
   final VenuesService _venuesService = VenuesService();
@@ -78,6 +81,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
   StreamSubscription? _finishSub;
 
   bool _loading = false;
+  bool _isEditingObservationDialogOpen = false;
   bool _eventsLoading = true;
   bool _observationsLoading = true;
   bool _refereesLoading = true;
@@ -130,6 +134,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
 
     _startSub = _socketService.matchStarted$.listen((_) {
       if (!mounted) return;
+      if (_isEditingObservationDialogOpen) return;
       setState(() {
         _match = Match(
           id: _match.id,
@@ -140,7 +145,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
           awayTeamId: _match.awayTeamId,
           venueId: _match.venueId,
           matchDate: _match.matchDate,
-          status: 'PLAYING',
+          status: 'PLAYING_FIRST_HALF',
           homeScore: _match.homeScore,
           awayScore: _match.awayScore,
           observations: _match.observations,
@@ -152,6 +157,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
 
     _scoreSub = _socketService.score$.listen((data) {
       if (!mounted) return;
+      if (_isEditingObservationDialogOpen) return;
       final hs = data['homeScore'] ?? data['home_score'] ?? data['home'];
       final awayValue =
           data['awayScore'] ?? data['away_score'] ?? data['away'];
@@ -179,6 +185,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
 
     _eventSub = _socketService.event$.listen((event) {
       if (!mounted) return;
+      if (_isEditingObservationDialogOpen) return;
       final normalized = _normalizeEvent(event);
       setState(() {
         final id = normalized['id']?.toString();
@@ -193,6 +200,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
 
     _finishSub = _socketService.finished$.listen((data) {
       if (!mounted) return;
+      if (_isEditingObservationDialogOpen) return;
       final hs = data['homeScore'] ?? data['home_score'];
       final awayValue = data['awayScore'] ?? data['away_score'];
       setState(() {
@@ -415,7 +423,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
       ...raw,
       'event_type':
           (raw['event_type'] ?? raw['type'] ?? 'EVENT').toString(),
-      'minute': int.tryParse((raw['minute'] ?? 0).toString()) ?? 0,
+      'minute': (raw['minute'] ?? '').toString().trim(),
       'team_id': inferredTeamId,
       'team_name': rawTeamName.isNotEmpty ? rawTeamName : mappedTeamName,
       'player_name': playerName.isNotEmpty
@@ -455,6 +463,26 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
     }
   }
 
+  Future<void> _endFirstHalf() async {
+    setState(() => _loading = true);
+    try {
+      await _service.endFirstHalf(_match.id);
+      await _refresh();
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _startSecondHalf() async {
+    setState(() => _loading = true);
+    try {
+      await _service.startSecondHalf(_match.id);
+      await _refresh();
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   Future<void> _cancelMatch() async {
     final confirmed = await _confirmCancelMatch();
     if (!confirmed) return;
@@ -466,6 +494,424 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  bool get _canEditObservationSections =>
+      _match.status == 'PLAYING_FIRST_HALF' ||
+      _match.status == 'PLAYING_SECOND_HALF';
+
+  Future<void> _editVocalObservation() async {
+    final controller = TextEditingController(text: _match.observations ?? '');
+    var saving = false;
+    _isEditingObservationDialogOpen = true;
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Editar observación del vocal'),
+              content: TextField(
+                controller: controller,
+                minLines: 4,
+                maxLines: 8,
+                decoration: const InputDecoration(
+                  hintText: 'Escribe la observación del vocal',
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: saving
+                      ? null
+                      : () => Navigator.pop(dialogContext, false),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: saving
+                      ? null
+                      : () async {
+                          setDialogState(() => saving = true);
+                          try {
+                            await _service.updateAdminObservationDuringMatch(
+                              _match.id,
+                              controller.text.trim(),
+                            );
+                            if (!mounted) return;
+                            Navigator.pop(dialogContext, true);
+                          } catch (e) {
+                            if (!mounted) return;
+                            final message = e.toString().replaceFirst('Exception: ', '');
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(message)),
+                            );
+                            setDialogState(() => saving = false);
+                          }
+                        },
+                  child: Text(saving ? 'Guardando...' : 'Guardar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    _isEditingObservationDialogOpen = false;
+    if (saved == true) {
+      await _refresh();
+    }
+  }
+
+  Future<void> _editTeamObservations() async {
+    List<MatchLineupPlayer> homeLineup = [];
+    List<MatchLineupPlayer> awayLineup = [];
+
+    try {
+      homeLineup = await _lineupsService.getLineup(_match.id, _match.homeTeamId);
+      awayLineup = await _lineupsService.getLineup(_match.id, _match.awayTeamId);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No se pudo cargar la alineación de los equipos'),
+        ),
+      );
+      return;
+    }
+
+    MatchObservation? homeObs;
+    MatchObservation? awayObs;
+    for (final o in _teamObservations) {
+      if (o.teamId == _match.homeTeamId) {
+        homeObs = o;
+      } else if (o.teamId == _match.awayTeamId) {
+        awayObs = o;
+      }
+    }
+
+    String? homeSubmittedBy = homeObs?.submittedBy;
+    String? awaySubmittedBy = awayObs?.submittedBy;
+    if (homeSubmittedBy != null && homeLineup.every((p) => p.playerId != homeSubmittedBy)) {
+      homeSubmittedBy = null;
+    }
+    if (awaySubmittedBy != null && awayLineup.every((p) => p.playerId != awaySubmittedBy)) {
+      awaySubmittedBy = null;
+    }
+
+    final homeController = TextEditingController(text: homeObs?.observation ?? '');
+    final awayController = TextEditingController(text: awayObs?.observation ?? '');
+    var saving = false;
+    _isEditingObservationDialogOpen = true;
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Editar observaciones de equipos'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      _buildTeamObservationEditor(
+                        title: _teamName(_match.homeTeamId),
+                        players: homeLineup,
+                        selectedPlayerId: homeSubmittedBy,
+                        onPlayerChanged: (value) {
+                          setDialogState(() => homeSubmittedBy = value);
+                        },
+                        controller: homeController,
+                      ),
+                      const SizedBox(height: 12),
+                      _buildTeamObservationEditor(
+                        title: _teamName(_match.awayTeamId),
+                        players: awayLineup,
+                        selectedPlayerId: awaySubmittedBy,
+                        onPlayerChanged: (value) {
+                          setDialogState(() => awaySubmittedBy = value);
+                        },
+                        controller: awayController,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: saving
+                      ? null
+                      : () => Navigator.pop(dialogContext, false),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: saving
+                      ? null
+                      : () async {
+                          final homeText = homeController.text.trim();
+                          final awayText = awayController.text.trim();
+                          if (homeText.isEmpty && awayText.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Ingresa al menos una observación de equipo'),
+                              ),
+                            );
+                            return;
+                          }
+                          if (homeText.isNotEmpty && homeSubmittedBy == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Selecciona el jugador que reporta del equipo local'),
+                              ),
+                            );
+                            return;
+                          }
+                          if (awayText.isNotEmpty && awaySubmittedBy == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Selecciona el jugador que reporta del equipo visitante'),
+                              ),
+                            );
+                            return;
+                          }
+
+                          setDialogState(() => saving = true);
+                          try {
+                            if (homeText.isNotEmpty) {
+                              await _service.submitTeamObservation(
+                                matchId: _match.id,
+                                teamId: _match.homeTeamId,
+                                submittedBy: homeSubmittedBy!,
+                                observation: homeText,
+                                status: 'SUBMITTED',
+                              );
+                            }
+                            if (awayText.isNotEmpty) {
+                              await _service.submitTeamObservation(
+                                matchId: _match.id,
+                                teamId: _match.awayTeamId,
+                                submittedBy: awaySubmittedBy!,
+                                observation: awayText,
+                                status: 'SUBMITTED',
+                              );
+                            }
+
+                            if (!mounted) return;
+                            Navigator.pop(dialogContext, true);
+                          } catch (e) {
+                            if (!mounted) return;
+                            final message = e.toString().replaceFirst('Exception: ', '');
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(message)),
+                            );
+                            setDialogState(() => saving = false);
+                          }
+                        },
+                  child: Text(saving ? 'Guardando...' : 'Guardar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    _isEditingObservationDialogOpen = false;
+    if (saved == true) {
+      await _loadTeamObservations();
+    }
+  }
+
+  Future<void> _editRefereeObservations() async {
+    if (_matchReferees.isEmpty) {
+      await _loadMatchReferees();
+    }
+    if (!mounted) return;
+    if (_matchReferees.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No hay árbitros asignados a este partido'),
+        ),
+      );
+      return;
+    }
+
+    final currentByReferee = {
+      for (final o in _refereeObservations) o.refereeId: o,
+    };
+    final controllers = <String, TextEditingController>{};
+    for (final a in _matchReferees) {
+      controllers[a.refereeId] = TextEditingController(
+        text: currentByReferee[a.refereeId]?.observation ?? '',
+      );
+    }
+
+    var saving = false;
+    _isEditingObservationDialogOpen = true;
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Editar observaciones de árbitros'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: _matchReferees.map((assignment) {
+                      final refereeName =
+                          assignment.referee?.fullName.trim().isNotEmpty == true
+                              ? assignment.referee!.fullName
+                              : assignment.refereeId;
+                      final ctrl = controllers[assignment.refereeId]!;
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${_roleLabel(assignment.role)}: $refereeName',
+                              style: const TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: ctrl,
+                              minLines: 2,
+                              maxLines: 4,
+                              decoration: const InputDecoration(
+                                hintText: 'Escribe la observación del árbitro',
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: saving
+                      ? null
+                      : () => Navigator.pop(dialogContext, false),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: saving
+                      ? null
+                      : () async {
+                          final hasAnyObservation = controllers.values.any(
+                            (c) => c.text.trim().isNotEmpty,
+                          );
+                          if (!hasAnyObservation) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Ingresa al menos una observación de árbitro'),
+                              ),
+                            );
+                            return;
+                          }
+
+                          setDialogState(() => saving = true);
+                          try {
+                            for (final assignment in _matchReferees) {
+                              final text = controllers[assignment.refereeId]!.text.trim();
+                              if (text.isEmpty) continue;
+                              await _matchRefereeObservationsService.submitObservation(
+                                matchId: _match.id,
+                                refereeId: assignment.refereeId,
+                                observation: text,
+                                status: 'SUBMITTED',
+                              );
+                            }
+                            if (!mounted) return;
+                            Navigator.pop(dialogContext, true);
+                          } catch (e) {
+                            if (!mounted) return;
+                            final message = e.toString().replaceFirst('Exception: ', '');
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(message)),
+                            );
+                            setDialogState(() => saving = false);
+                          }
+                        },
+                  child: Text(saving ? 'Guardando...' : 'Guardar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    _isEditingObservationDialogOpen = false;
+    if (saved == true) {
+      await _loadRefereeObservations();
+    }
+  }
+
+  Widget _buildTeamObservationEditor({
+    required String title,
+    required List<MatchLineupPlayer> players,
+    required String? selectedPlayerId,
+    required ValueChanged<String?> onPlayerChanged,
+    required TextEditingController controller,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A2332),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Observación de $title',
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            initialValue: selectedPlayerId,
+            isExpanded: true,
+            items: players.map((p) {
+              return DropdownMenuItem<String>(
+                value: p.playerId,
+                child: Text(
+                  '${p.playerName} (#${p.shirtNumber})',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+            }).toList(),
+            onChanged: players.isEmpty ? null : onPlayerChanged,
+            decoration: InputDecoration(
+              labelText: players.isEmpty
+                  ? 'Sin alineación registrada'
+                  : 'Jugador que reporta',
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: controller,
+            minLines: 2,
+            maxLines: 4,
+            decoration: const InputDecoration(
+              hintText: 'Escribe la observación del equipo',
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<bool> _confirmStartMatch() async {
@@ -644,8 +1090,8 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
             children: [
               Text(
                 _statusLabelEs(_match.status),
-                style: const TextStyle(
-                  color: Colors.orange,
+                style: TextStyle(
+                  color: _statusTextColor(_match.status),
                   fontWeight: FontWeight.w600,
                   fontSize: 18,
                 ),
@@ -671,7 +1117,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
                 style: TextStyle(
                   fontSize: 34,
                   fontWeight: FontWeight.bold,
-                  color: _match.status == 'PLAYING'
+                  color: _isPlayingStatus(_match.status)
                       ? Colors.greenAccent
                       : Colors.white,
                 ),
@@ -759,17 +1205,28 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
                 onPressed: _loading ? null : _startMatch,
                 child: const Text('Iniciar'),
               ),
-            if (_match.status == 'PLAYING')
+            if (_match.status == 'PLAYING_SECOND_HALF')
               ElevatedButton(
                 onPressed: _finishMatchDialog,
                 child: const Text('Finalizar'),
+              ),
+            if (_match.status == 'PLAYING_FIRST_HALF')
+              ElevatedButton(
+                onPressed: _loading ? null : _endFirstHalf,
+                child: const Text('TERMINAR PRIMER TIEMPO'),
+              ),
+            if (_match.status == 'HALF_TIME')
+              ElevatedButton(
+                onPressed: _loading ? null : _startSecondHalf,
+                child: const Text('EMPEZAR SEGUNDO TIEMPO'),
               ),
             if (_match.status != 'PLAYED')
               TextButton(
                 onPressed: _loading ? null : _cancelMatch,
                 child: const Text('Cancelar'),
               ),
-            if (_match.status == 'PLAYING')
+            if (_match.status == 'PLAYING_FIRST_HALF' ||
+                _match.status == 'PLAYING_SECOND_HALF')
               OutlinedButton(
                 onPressed: () {
                   Navigator.push(
@@ -983,7 +1440,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
         separatorBuilder: (_, index) => const SizedBox(height: 10),
         itemBuilder: (context, index) {
           final e = _events[index];
-          final minute = e['minute']?.toString() ?? '0';
+          final minute = (e['minute'] ?? '').toString().trim();
           final type = (e['event_type'] ?? 'EVENT').toString();
           final typeLabel = _eventLabelEs(type);
           final playerName = (e['player_name'] ?? '').toString();
@@ -992,59 +1449,86 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
           final teamNameResolved = teamName.isNotEmpty
               ? teamName
               : _teamNameOrEmpty((e['team_id'] ?? '').toString());
+          final eventTeamId = (e['team_id'] ?? '').toString();
+          final isAwayTeamEvent = eventTeamId == _match.awayTeamId;
+          final textAlign =
+              isAwayTeamEvent ? TextAlign.end : TextAlign.start;
+          final columnAlignment = isAwayTeamEvent
+              ? CrossAxisAlignment.end
+              : CrossAxisAlignment.start;
           final icon = _eventIcon(type);
           final color = _eventColor(type);
 
-          return Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              color: const Color(0xFF1A2332),
-            ),
-            child: Row(
+          final details = Expanded(
+            child: Column(
+              crossAxisAlignment: columnAlignment,
               children: [
-                _buildEventMarker(type, icon, color),
-                const SizedBox(width: 12),
                 Text(
-                  "$minute'",
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                  ),
+                  typeLabel,
+                  textAlign: textAlign,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        typeLabel,
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        shirt == null || shirt.isEmpty
-                            ? playerName
-                            : '$playerName (#$shirt)',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white70),
-                      ),
-                      if (teamNameResolved.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          teamNameResolved,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white54,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
+                const SizedBox(height: 4),
+                Text(
+                  shirt == null || shirt.isEmpty
+                      ? playerName
+                      : '$playerName (#$shirt)',
+                  maxLines: 2,
+                  textAlign: textAlign,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white70),
                 ),
+                if (teamNameResolved.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    teamNameResolved,
+                    maxLines: 1,
+                    textAlign: textAlign,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white54,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
               ],
+            ),
+          );
+
+          final minuteWidget = _buildMinuteBadge(minute);
+
+          final markerWidget = _buildEventMarker(type, icon, color);
+
+          return Align(
+            alignment: isAwayTeamEvent
+                ? Alignment.centerRight
+                : Alignment.centerLeft,
+            child: FractionallySizedBox(
+              widthFactor: 0.94,
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  color: const Color(0xFF1A2332),
+                ),
+                child: Row(
+                  children: isAwayTeamEvent
+                      ? [
+                          details,
+                          const SizedBox(width: 12),
+                          minuteWidget,
+                          const SizedBox(width: 12),
+                          markerWidget,
+                        ]
+                      : [
+                          markerWidget,
+                          const SizedBox(width: 12),
+                          minuteWidget,
+                          const SizedBox(width: 12),
+                          details,
+                        ],
+                ),
+              ),
             ),
           );
         },
@@ -1214,12 +1698,23 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Observación del vocal',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Observación del vocal',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                    if (_canEditObservationSections)
+                      TextButton(
+                        onPressed: _editVocalObservation,
+                        child: const Text('Editar'),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 10),
                 Text(
@@ -1241,12 +1736,23 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Observaciones de equipos',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Observaciones de equipos',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                    if (_canEditObservationSections)
+                      TextButton(
+                        onPressed: _editTeamObservations,
+                        child: const Text('Editar'),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 10),
                 if (_observationsLoading)
@@ -1319,120 +1825,122 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              color: const Color(0xFF1A2332),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Calificaciones a arbitros',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                if (_refereeRatingsLoading)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    child: Center(
-                      child: CircularProgressIndicator(),
-                    ),
-                  )
-                else if (_refereeRatings.isEmpty)
+          if (_showRefereeRatingsInObservations) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                color: const Color(0xFF1A2332),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   const Text(
-                    'Sin calificaciones de arbitros registradas.',
-                    style: TextStyle(color: Colors.white70),
-                  )
-                else
-                  Column(
-                    children: _refereeRatings.map((r) {
-                      final role = _matchReferees
-                          .where((a) => a.refereeId == r.refereeId)
-                          .map((a) => _roleLabel(a.role))
-                          .cast<String?>()
-                          .firstWhere(
-                            (value) => value != null,
-                            orElse: () => null,
-                          );
+                    'Calificaciones a arbitros',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  if (_refereeRatingsLoading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Center(
+                        child: CircularProgressIndicator(),
+                      ),
+                    )
+                  else if (_refereeRatings.isEmpty)
+                    const Text(
+                      'Sin calificaciones de arbitros registradas.',
+                      style: TextStyle(color: Colors.white70),
+                    )
+                  else
+                    Column(
+                      children: _refereeRatings.map((r) {
+                        final role = _matchReferees
+                            .where((a) => a.refereeId == r.refereeId)
+                            .map((a) => _roleLabel(a.role))
+                            .cast<String?>()
+                            .firstWhere(
+                              (value) => value != null,
+                              orElse: () => null,
+                            );
 
-                      final submittedAt = r.submittedAt;
-                      final dateText = submittedAt == null
-                          ? ''
-                          : '${submittedAt.day.toString().padLeft(2, '0')}/'
-                              '${submittedAt.month.toString().padLeft(2, '0')}/'
-                              '${submittedAt.year} '
-                              '${submittedAt.hour.toString().padLeft(2, '0')}:'
-                              '${submittedAt.minute.toString().padLeft(2, '0')}';
+                        final submittedAt = r.submittedAt;
+                        final dateText = submittedAt == null
+                            ? ''
+                            : '${submittedAt.day.toString().padLeft(2, '0')}/'
+                                '${submittedAt.month.toString().padLeft(2, '0')}/'
+                                '${submittedAt.year} '
+                                '${submittedAt.hour.toString().padLeft(2, '0')}:'
+                                '${submittedAt.minute.toString().padLeft(2, '0')}';
 
-                      final refereeLabel =
-                          r.refereeName?.trim().isNotEmpty == true
-                              ? r.refereeName!
-                              : r.refereeId;
+                        final refereeLabel =
+                            r.refereeName?.trim().isNotEmpty == true
+                                ? r.refereeName!
+                                : r.refereeId;
 
-                      final teamLabel = r.teamName?.trim().isNotEmpty == true
-                          ? r.teamName!
-                          : _teamName(r.teamId);
+                        final teamLabel = r.teamName?.trim().isNotEmpty == true
+                            ? r.teamName!
+                            : _teamName(r.teamId);
 
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              role == null
-                                  ? refereeLabel
-                                  : '$refereeLabel ($role)',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Equipo: $teamLabel',
-                              style: const TextStyle(
-                                color: Colors.white70,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            _buildTenStarRating(r.rating),
-                            const SizedBox(height: 4),
-                            Text(
-                              r.comment?.trim().isNotEmpty == true
-                                  ? r.comment!
-                                  : 'Sin comentario',
-                              style: const TextStyle(
-                                color: Colors.white60,
-                              ),
-                            ),
-                            if (dateText.isNotEmpty) ...[
-                              const SizedBox(height: 4),
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0F172A),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
                               Text(
-                                dateText,
+                                role == null
+                                    ? refereeLabel
+                                    : '$refereeLabel ($role)',
                                 style: const TextStyle(
-                                  color: Colors.white54,
-                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Equipo: $teamLabel',
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              _buildTenStarRating(r.rating),
+                              const SizedBox(height: 4),
+                              Text(
+                                r.comment?.trim().isNotEmpty == true
+                                    ? r.comment!
+                                    : 'Sin comentario',
+                                style: const TextStyle(
+                                  color: Colors.white60,
+                                ),
+                              ),
+                              if (dateText.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  dateText,
+                                  style: const TextStyle(
+                                    color: Colors.white54,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
                             ],
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                  ),
-              ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                ],
+              ),
             ),
-          ),
+          ],
           const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.all(16),
@@ -1443,12 +1951,23 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Observaciones de arbitros',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Observaciones de arbitros',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                    if (_canEditObservationSections)
+                      TextButton(
+                        onPressed: _editRefereeObservations,
+                        child: const Text('Editar'),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 10),
                 if (_refereeObservationsLoading)
@@ -1752,6 +2271,56 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
     );
   }
 
+  Widget _buildMinuteBadge(String minuteRaw) {
+    final minuteText = minuteRaw.trim();
+    final match = RegExp(r'^(\d+)\s*([12])t$', caseSensitive: false)
+        .firstMatch(minuteText);
+
+    final displayMain = match != null
+        ? "${match.group(1)}'"
+        : (minuteText.isEmpty ? '--' : minuteText);
+    final displayHalf = match != null ? "${match.group(2)}t" : null;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.12),
+          width: 1,
+        ),
+      ),
+      child: RichText(
+        text: TextSpan(
+          children: [
+            TextSpan(
+              text: displayMain,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                fontSize: 16,
+                letterSpacing: 0.2,
+              ),
+            ),
+            if (displayHalf != null) ...[
+              const TextSpan(text: '  '),
+              TextSpan(
+                text: displayHalf,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontStyle: FontStyle.italic,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildTenStarRating(int rating) {
     final safeRating = rating.clamp(0, 10);
 
@@ -1808,6 +2377,12 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
     switch (status.toUpperCase()) {
       case 'SCHEDULED':
         return 'POR JUGAR';
+      case 'HALF_TIME':
+        return 'DESCANSO';
+      case 'PLAYING_FIRST_HALF':
+        return 'JUGANDO PRIMER TIEMPO';
+      case 'PLAYING_SECOND_HALF':
+        return 'JUGANDO SEGUNDO TIEMPO';
       case 'PLAYING':
         return 'JUGANDO';
       case 'PLAYED':
@@ -1818,4 +2393,22 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
         return status;
     }
   }
+
+  Color _statusTextColor(String status) {
+    if (_isPlayingStatus(status)) {
+      return Colors.green;
+    }
+    if (status.toUpperCase() == 'HALF_TIME') {
+      return const Color(0xFFE879F9);
+    }
+    return Colors.orange;
+  }
+
+  bool _isPlayingStatus(String status) {
+    final normalized = status.toUpperCase();
+    return normalized == 'PLAYING' ||
+        normalized == 'PLAYING_FIRST_HALF' ||
+        normalized == 'PLAYING_SECOND_HALF';
+  }
 }
+

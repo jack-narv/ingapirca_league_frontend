@@ -221,8 +221,20 @@ class _SeasonStatisticsScreenState extends State<SeasonStatisticsScreen> {
 
           final stats = _SeasonStats.fromData(snapshot.data!);
 
+          const hideBestPlayersTab = true;
+          final tabs = <Tab>[
+            const Tab(text: "ESTADISTICAS"),
+            const Tab(text: "GOLEADORES"),
+            if (!hideBestPlayersTab) const Tab(text: "MEJORES JUGADORES"),
+          ];
+          final tabViews = <Widget>[
+            _buildStatisticsTab(stats),
+            _buildScorersTab(stats),
+            if (!hideBestPlayersTab) _buildMvpTab(stats),
+          ];
+
           return DefaultTabController(
-            length: 3,
+            length: tabs.length,
             child: Column(
               children: [
                 Container(
@@ -231,22 +243,14 @@ class _SeasonStatisticsScreenState extends State<SeasonStatisticsScreen> {
                     color: const Color(0xFF1A2332),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: const TabBar(
+                  child: TabBar(
                     indicatorSize: TabBarIndicatorSize.tab,
-                    tabs: [
-                      Tab(text: "ESTADISTICAS"),
-                      Tab(text: "GOLEADORES"),
-                      Tab(text: "MEJORES JUGADORES"),
-                    ],
+                    tabs: tabs,
                   ),
                 ),
                 Expanded(
                   child: TabBarView(
-                    children: [
-                      _buildStatisticsTab(stats),
-                      _buildScorersTab(stats),
-                      _buildMvpTab(stats),
-                    ],
+                    children: tabViews,
                   ),
                 ),
               ],
@@ -1764,40 +1768,51 @@ class _ScorerDataTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        headingRowHeight: 36,
-        dataRowMinHeight: 36,
-        dataRowMaxHeight: 42,
-        columns: const [
-          DataColumn(label: Text("#")),
-          DataColumn(label: Text("Jugador")),
-          DataColumn(label: Text("Equipo")),
-          DataColumn(label: Text("Goles")),
-        ],
-        rows: List.generate(entries.length, (index) {
-          final entry = entries[index];
-          return DataRow(
-            cells: [
-              DataCell(Text("${index + 1}")),
-              DataCell(
-                SizedBox(
-                  width: 180,
-                  child: Text(entry.playerName, overflow: TextOverflow.ellipsis),
-                ),
-              ),
-              DataCell(
-                SizedBox(
-                  width: 140,
-                  child: Text(entry.teamName, overflow: TextOverflow.ellipsis),
-                ),
-              ),
-              DataCell(Text("${entry.goals}")),
-            ],
-          );
-        }),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: constraints.maxWidth),
+            child: DataTable(
+              headingRowHeight: 36,
+              dataRowMinHeight: 36,
+              dataRowMaxHeight: 42,
+              horizontalMargin: 8,
+              columnSpacing: 12,
+              columns: const [
+                DataColumn(label: Text("#")),
+                DataColumn(label: Text("Jugador")),
+                DataColumn(label: Text("Equipo")),
+                DataColumn(label: Text("Goles")),
+              ],
+              rows: List.generate(entries.length, (index) {
+                final entry = entries[index];
+                return DataRow(
+                  cells: [
+                    DataCell(Text("${index + 1}")),
+                    DataCell(
+                      SizedBox(
+                        width: 120,
+                        child:
+                            Text(entry.playerName, overflow: TextOverflow.ellipsis),
+                      ),
+                    ),
+                    DataCell(
+                      SizedBox(
+                        width: 100,
+                        child: Text(entry.teamName, overflow: TextOverflow.ellipsis),
+                      ),
+                    ),
+                    DataCell(Text("${entry.goals}")),
+                  ],
+                );
+              }),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -1876,46 +1891,57 @@ class _MvpDataTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        headingRowHeight: 36,
-        dataRowMinHeight: 36,
-        dataRowMaxHeight: 42,
-        columns: const [
-          DataColumn(label: Text("#")),
-          DataColumn(label: Text("Jugador")),
-          DataColumn(label: Text("Dorsal")),
-          DataColumn(label: Text("Equipo")),
-          DataColumn(label: Text("Mejor Jugador")),
-          DataColumn(label: Text("Mejor Arquero")),
-          DataColumn(label: Text("Total")),
-        ],
-        rows: List.generate(entries.length, (index) {
-          final entry = entries[index];
-          return DataRow(
-            cells: [
-              DataCell(Text("${index + 1}")),
-              DataCell(
-                SizedBox(
-                  width: 180,
-                  child: Text(entry.playerName, overflow: TextOverflow.ellipsis),
-                ),
-              ),
-              DataCell(Text(entry.shirtNumber?.toString() ?? "--")),
-              DataCell(
-                SizedBox(
-                  width: 140,
-                  child: Text(entry.teamName, overflow: TextOverflow.ellipsis),
-                ),
-              ),
-              DataCell(Text("${entry.bestPlayerAwards}")),
-              DataCell(Text("${entry.bestGoalkeeperAwards}")),
-              DataCell(Text("${entry.totalAwards}")),
-            ],
-          );
-        }),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: constraints.maxWidth),
+            child: DataTable(
+              headingRowHeight: 36,
+              dataRowMinHeight: 36,
+              dataRowMaxHeight: 42,
+              horizontalMargin: 8,
+              columnSpacing: 10,
+              columns: const [
+                DataColumn(label: Text("#")),
+                DataColumn(label: Text("Jugador")),
+                DataColumn(label: Text("Dorsal")),
+                DataColumn(label: Text("Equipo")),
+                DataColumn(label: Text("Mejor Jugador")),
+                DataColumn(label: Text("Mejor Arquero")),
+                DataColumn(label: Text("Total")),
+              ],
+              rows: List.generate(entries.length, (index) {
+                final entry = entries[index];
+                return DataRow(
+                  cells: [
+                    DataCell(Text("${index + 1}")),
+                    DataCell(
+                      SizedBox(
+                        width: 110,
+                        child:
+                            Text(entry.playerName, overflow: TextOverflow.ellipsis),
+                      ),
+                    ),
+                    DataCell(Text(entry.shirtNumber?.toString() ?? "--")),
+                    DataCell(
+                      SizedBox(
+                        width: 90,
+                        child: Text(entry.teamName, overflow: TextOverflow.ellipsis),
+                      ),
+                    ),
+                    DataCell(Text("${entry.bestPlayerAwards}")),
+                    DataCell(Text("${entry.bestGoalkeeperAwards}")),
+                    DataCell(Text("${entry.totalAwards}")),
+                  ],
+                );
+              }),
+            ),
+          ),
+        );
+      },
     );
   }
 }

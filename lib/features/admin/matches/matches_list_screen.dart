@@ -413,7 +413,7 @@ class _MatchesListScreenState
         style: TextStyle(
           fontSize: 18,
           fontWeight: FontWeight.bold,
-          color: match.status == 'PLAYING'
+          color: _isPlayingStatus(match.status)
               ? Colors.greenAccent
               : Colors.white,
         ),
@@ -427,6 +427,11 @@ class _MatchesListScreenState
         case 'SCHEDULED':
           color = Colors.orange;
           break;
+        case 'HALF_TIME':
+          color = const Color(0xFFE879F9);
+          break;
+        case 'PLAYING_FIRST_HALF':
+        case 'PLAYING_SECOND_HALF':
         case 'PLAYING':
           color = Colors.green;
           break;
@@ -463,6 +468,12 @@ class _MatchesListScreenState
       switch (status.toUpperCase()) {
         case 'SCHEDULED':
           return 'POR JUGAR';
+        case 'HALF_TIME':
+          return 'DESCANSO';
+        case 'PLAYING_FIRST_HALF':
+          return 'JUGANDO PRIMER TIEMPO';
+        case 'PLAYING_SECOND_HALF':
+          return 'JUGANDO SEGUNDO TIEMPO';
         case 'PLAYING':
           return 'JUGANDO';
         case 'PLAYED':
@@ -472,6 +483,13 @@ class _MatchesListScreenState
         default:
           return status;
       }
+    }
+
+    bool _isPlayingStatus(String status) {
+      final normalized = status.toUpperCase();
+      return normalized == 'PLAYING' ||
+          normalized == 'PLAYING_FIRST_HALF' ||
+          normalized == 'PLAYING_SECOND_HALF';
     }
 
     Widget _journalBadge(String journal) {
