@@ -3,7 +3,7 @@ class MatchEvent {
   final String matchId;
   final String teamId;
   final String playerId;
-  final int minute;
+  final String minute;
   final String eventType;
   final String? relatedPlayerId;
   final String? playerName;
@@ -30,7 +30,7 @@ class MatchEvent {
       matchId: json['match_id'],
       teamId: json['team_id'],
       playerId: json['player_id'],
-      minute: json['minute'],
+      minute: (json['minute'] ?? '').toString(),
       eventType: json['event_type'],
       relatedPlayerId: json['related_player_id'],
       playerName: json['player_name'] ??

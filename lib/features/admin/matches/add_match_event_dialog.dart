@@ -8,6 +8,7 @@ class AddMatchEventDialog extends StatefulWidget {
   final String awayTeamId;
   final String homeTeamName;
   final String awayTeamName;
+  final String matchStatus;
   final List<MatchLineupPlayer> homeLineup;
   final List<MatchLineupPlayer> awayLineup;
 
@@ -18,6 +19,7 @@ class AddMatchEventDialog extends StatefulWidget {
     required this.awayTeamId,
     required this.homeTeamName,
     required this.awayTeamName,
+    required this.matchStatus,
     required this.homeLineup,
     required this.awayLineup,
   });
@@ -92,11 +94,21 @@ class _AddMatchEventDialogState
     setState(() => _loading = true);
 
     try {
+      final formattedMinute = _formattedMinuteByHalf();
+      if (formattedMinute == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Solo puedes registrar eventos en primer o segundo tiempo"),
+          ),
+        );
+        return;
+      }
+
       await _service.createEvent(
         matchId: widget.matchId,
         teamId: _teamId,
         playerId: _playerId!,
-        minute: _minute,
+        minute: formattedMinute,
         eventType: _type,
         relatedPlayerId: _relatedPlayerId,
       );
@@ -111,6 +123,17 @@ class _AddMatchEventDialogState
         setState(() => _loading = false);
       }
     }
+  }
+
+  String? _formattedMinuteByHalf() {
+    final status = widget.matchStatus.toUpperCase();
+    if (status == 'PLAYING_FIRST_HALF') {
+      return '$_minute 1t';
+    }
+    if (status == 'PLAYING_SECOND_HALF') {
+      return '$_minute 2t';
+    }
+    return null;
   }
 
   String _playerLabel(MatchLineupPlayer player) {
