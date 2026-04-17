@@ -11,6 +11,7 @@ import '../../../models/referee_ratings.dart';
 import '../../../models/referees.dart';
 import '../../../models/team.dart';
 import '../../../models/venue.dart';
+import '../../../models/vocalia.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/live_match_service.dart';
 import '../../../services/match_events_service.dart';
@@ -21,6 +22,7 @@ import '../../../services/referee_ratings_service.dart';
 import '../../../services/referees_service.dart';
 import '../../../services/teams_service.dart';
 import '../../../services/venues_service.dart';
+import '../../../services/vocalia_service.dart';
 import 'finalize_match_screen.dart';
 import 'match_lineup_screen.dart';
 import 'match_live_screen.dart';
@@ -54,6 +56,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
   final MatchRefereeObservationsService
       _matchRefereeObservationsService =
       MatchRefereeObservationsService();
+  final VocaliaService _vocaliaService = VocaliaService();
   final LiveMatchSocketService _socketService =
       LiveMatchSocketService(authService: AuthService());
 
@@ -74,6 +77,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
   final List<MatchRefereeAssignment> _matchReferees = [];
   final List<RefereeRating> _refereeRatings = [];
   final List<MatchRefereeObservation> _refereeObservations = [];
+  final List<MatchVocalia> _vocalia = [];
 
   StreamSubscription? _scoreSub;
   StreamSubscription? _eventSub;
@@ -87,6 +91,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
   bool _refereesLoading = true;
   bool _refereeRatingsLoading = true;
   bool _refereeObservationsLoading = true;
+  bool _vocaliaLoading = true;
 
   @override
   void initState() {
@@ -126,6 +131,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
     await _loadRefereeRatings();
     await _loadRefereeObservations();
     await _loadTeamObservations();
+    await _loadVocalia();
   }
 
   Future<void> _initLive() async {
@@ -393,6 +399,28 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
     } finally {
       if (mounted) {
         setState(() => _refereeObservationsLoading = false);
+      }
+    }
+  }
+
+  Future<void> _loadVocalia() async {
+    setState(() => _vocaliaLoading = true);
+    try {
+      final data = await _vocaliaService.getByMatch(_match.id);
+      if (!mounted) return;
+      setState(() {
+        _vocalia
+          ..clear()
+          ..addAll(data);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _vocalia.clear();
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _vocaliaLoading = false);
       }
     }
   }
@@ -1825,6 +1853,36 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
               ],
             ),
           ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              color: const Color(0xFF1A2332),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Tabla de vocalias',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                if (_vocaliaLoading)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                  )
+                else
+                  _buildVocaliaTeamsTables(),
+              ],
+            ),
+          ),
           if (_showRefereeRatingsInObservations) ...[
             const SizedBox(height: 12),
             Container(
@@ -2058,6 +2116,167 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildVocaliaTeamsTables() {
+    final vocaliaByTeam = <String, MatchVocalia>{
+      for (final item in _vocalia) item.teamId: item,
+    };
+    final orderedTeamIds = [
+      _match.homeTeamId,
+      _match.awayTeamId,
+    ];
+
+    final teamTables = orderedTeamIds
+        .map((teamId) => vocaliaByTeam[teamId])
+        .whereType<MatchVocalia>()
+        .toList();
+
+    if (teamTables.isEmpty) {
+      return const Text(
+        'Sin vocalias registradas para este partido.',
+        style: TextStyle(color: Colors.white70),
+      );
+    }
+
+    return Column(
+      children: teamTables.map((item) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: _buildSingleVocaliaTable(item),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildSingleVocaliaTable(MatchVocalia item) {
+    final teamLabel = (item.teamName ?? '').trim().isNotEmpty
+        ? item.teamName!.trim()
+        : _teamName(item.teamId);
+
+    final rows = [
+      ...item.values.map(
+        (value) => TableRow(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: 8,
+              ),
+              child: Text(
+                value.concept.toUpperCase(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: 8,
+              ),
+              child: Text(
+                _formatVocaliaAmount(value.amount),
+                textAlign: TextAlign.right,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      TableRow(
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.06),
+        ),
+        children: [
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: Text(
+              'TOTAL',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: 8,
+            ),
+            child: Text(
+              _formatVocaliaAmount(item.totalAmount),
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
+    ];
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        color: const Color(0xFF0F172A),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Table(
+          border: TableBorder.all(
+            color: Colors.white.withValues(alpha: 0.12),
+            width: 1,
+          ),
+          columnWidths: const {
+            0: FlexColumnWidth(3),
+            1: FlexColumnWidth(1),
+          },
+          children: [
+            TableRow(
+              decoration: const BoxDecoration(
+                color: Color(0xFF13263F),
+              ),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 9,
+                  ),
+                  child: Text(
+                    teamLabel.toUpperCase(),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF9BE49B),
+                    ),
+                  ),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 9,
+                  ),
+                  child: Text(
+                    'VALOR',
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            ...rows,
+          ],
+        ),
       ),
     );
   }
@@ -2336,6 +2555,11 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
         );
       }),
     );
+  }
+
+  String _formatVocaliaAmount(double amount) {
+    final fixed = amount.toStringAsFixed(2);
+    return fixed.replaceFirst(RegExp(r'\.?0+$'), '');
   }
 
   String _formatDateTime(DateTime date) {
