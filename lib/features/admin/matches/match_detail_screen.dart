@@ -1501,18 +1501,16 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
                   shirt == null || shirt.isEmpty
                       ? playerName
                       : '$playerName (#$shirt)',
-                  maxLines: 2,
                   textAlign: textAlign,
-                  overflow: TextOverflow.ellipsis,
+                  softWrap: true,
                   style: const TextStyle(color: Colors.white70),
                 ),
                 if (teamNameResolved.isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Text(
                     teamNameResolved,
-                    maxLines: 1,
                     textAlign: textAlign,
-                    overflow: TextOverflow.ellipsis,
+                    softWrap: true,
                     style: const TextStyle(
                       color: Colors.white54,
                       fontSize: 12,
