@@ -122,6 +122,25 @@ class _MatchLineupScreenState extends State<MatchLineupScreen> {
 
   int get _startingCount => _players.where((p) => p.isStarting).length;
 
+  int _compareLineupPlayers(
+    MatchLineupPlayer a,
+    MatchLineupPlayer b,
+  ) {
+    final byShirt = a.shirtNumber.compareTo(b.shirtNumber);
+    if (byShirt != 0) return byShirt;
+    return a.playerName.toLowerCase().compareTo(
+      b.playerName.toLowerCase(),
+    );
+  }
+
+  List<MatchLineupPlayer> _sortedLineupPlayers(
+    List<MatchLineupPlayer> players,
+  ) {
+    final sorted = List<MatchLineupPlayer>.from(players);
+    sorted.sort(_compareLineupPlayers);
+    return sorted;
+  }
+
   void _toggleStarting(int index) {
     if (!_canEdit) return;
 
@@ -225,6 +244,16 @@ class _MatchLineupScreenState extends State<MatchLineupScreen> {
 
   Future<void> _createLineupFromTeam() async {
     final roster = await _playersService.getByTeam(widget.teamId);
+    final sortedRoster = List<TeamPlayer>.from(roster)
+      ..sort((a, b) {
+        final byShirt = a.shirtNumber.compareTo(b.shirtNumber);
+        if (byShirt != 0) return byShirt;
+        final nameA =
+            '${a.player.firstName} ${a.player.lastName}'.toLowerCase();
+        final nameB =
+            '${b.player.firstName} ${b.player.lastName}'.toLowerCase();
+        return nameA.compareTo(nameB);
+      });
 
     if (!mounted) return;
 
@@ -241,7 +270,7 @@ class _MatchLineupScreenState extends State<MatchLineupScreen> {
       context: context,
       builder: (_) => _BuildLineupDialog(
         teamName: widget.teamName,
-        roster: roster,
+        roster: sortedRoster,
         initialLineup: _players,
         suspendedByPlayerId: _suspendedByPlayerId,
         allowedStartingPlayers: _allowedStartingPlayers,
@@ -251,7 +280,7 @@ class _MatchLineupScreenState extends State<MatchLineupScreen> {
     if (selected == null) return;
 
     setState(() {
-      _players = selected;
+      _players = _sortedLineupPlayers(selected);
       _initialized = true;
     });
   }
@@ -305,7 +334,7 @@ class _MatchLineupScreenState extends State<MatchLineupScreen> {
           }
 
           if (!_initialized) {
-            _players = List<MatchLineupPlayer>.from(snapshot.data!);
+            _players = _sortedLineupPlayers(snapshot.data!);
             _initialized = true;
           }
 
@@ -570,10 +599,21 @@ class _BuildLineupDialog extends StatefulWidget {
 class _BuildLineupDialogState extends State<_BuildLineupDialog> {
   final Set<String> _selectedPlayerIds = {};
   final Set<String> _startingPlayerIds = {};
+  late final List<TeamPlayer> _sortedRoster;
 
   @override
   void initState() {
     super.initState();
+    _sortedRoster = List<TeamPlayer>.from(widget.roster)
+      ..sort((a, b) {
+        final byShirt = a.shirtNumber.compareTo(b.shirtNumber);
+        if (byShirt != 0) return byShirt;
+        final nameA =
+            '${a.player.firstName} ${a.player.lastName}'.toLowerCase();
+        final nameB =
+            '${b.player.firstName} ${b.player.lastName}'.toLowerCase();
+        return nameA.compareTo(nameB);
+      });
     _hydrateFromInitialLineup();
   }
 
@@ -662,7 +702,7 @@ class _BuildLineupDialogState extends State<_BuildLineupDialog> {
   }
 
   void _confirm() {
-    final selectedPlayers = widget.roster
+    final selectedPlayers = _sortedRoster
         .where(
           (p) =>
               _selectedPlayerIds.contains(p.playerId) &&
@@ -699,6 +739,14 @@ class _BuildLineupDialogState extends State<_BuildLineupDialog> {
       return;
     }
 
+    selectedPlayers.sort((a, b) {
+      final byShirt = a.shirtNumber.compareTo(b.shirtNumber);
+      if (byShirt != 0) return byShirt;
+      return a.playerName.toLowerCase().compareTo(
+        b.playerName.toLowerCase(),
+      );
+    });
+
     Navigator.pop(context, selectedPlayers);
   }
 
@@ -711,9 +759,9 @@ class _BuildLineupDialogState extends State<_BuildLineupDialog> {
         width: double.maxFinite,
         child: ListView.builder(
           shrinkWrap: true,
-          itemCount: widget.roster.length,
+          itemCount: _sortedRoster.length,
           itemBuilder: (context, index) {
-            final player = widget.roster[index];
+            final player = _sortedRoster[index];
             final selected = _selectedPlayerIds.contains(player.playerId);
             final starting = _startingPlayerIds.contains(player.playerId);
             final suspended =
