@@ -41,17 +41,35 @@ class _AddMatchEventDialogState
   late String _teamId;
   String? _playerId;
   String? _relatedPlayerId;
+  late final List<MatchLineupPlayer> _homeLineupSorted;
+  late final List<MatchLineupPlayer> _awayLineupSorted;
 
   List<MatchLineupPlayer> get _currentLineup =>
       _teamId == widget.homeTeamId
-          ? widget.homeLineup
-          : widget.awayLineup;
+          ? _homeLineupSorted
+          : _awayLineupSorted;
 
   @override
   void initState() {
     super.initState();
+    _homeLineupSorted = _sortedLineup(widget.homeLineup);
+    _awayLineupSorted = _sortedLineup(widget.awayLineup);
     _teamId = widget.homeTeamId;
     _hydratePlayers();
+  }
+
+  List<MatchLineupPlayer> _sortedLineup(
+    List<MatchLineupPlayer> lineup,
+  ) {
+    final sorted = List<MatchLineupPlayer>.from(lineup);
+    sorted.sort((a, b) {
+      final byShirt = a.shirtNumber.compareTo(b.shirtNumber);
+      if (byShirt != 0) return byShirt;
+      return a.playerName.toLowerCase().compareTo(
+        b.playerName.toLowerCase(),
+      );
+    });
+    return sorted;
   }
 
   void _hydratePlayers() {
