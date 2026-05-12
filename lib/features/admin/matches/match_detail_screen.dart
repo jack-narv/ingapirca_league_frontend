@@ -1861,12 +1861,30 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Tabla de vocalias',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Tabla de vocalias',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                    FutureBuilder<bool>(
+                      future: _canManageMatchFlowFuture,
+                      builder: (context, snapshot) {
+                        if (snapshot.data != true) {
+                          return const SizedBox();
+                        }
+                        return TextButton(
+                          onPressed: _editVocaliaTable,
+                          child: const Text('Agregar/Editar'),
+                        );
+                      },
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 10),
                 if (_vocaliaLoading)
@@ -2116,6 +2134,270 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _editVocaliaTable() async {
+    final existingByTeam = <String, MatchVocalia>{
+      for (final item in _vocalia) item.teamId: item,
+    };
+    final teamIds = [_match.homeTeamId, _match.awayTeamId];
+    final formRowsByTeam = <String, List<_VocaliaFormRow>>{};
+    final deletedValueIdsByTeam = <String, Set<String>>{
+      _match.homeTeamId: <String>{},
+      _match.awayTeamId: <String>{},
+    };
+
+    for (final teamId in teamIds) {
+      final existing = existingByTeam[teamId];
+      formRowsByTeam[teamId] = existing == null
+          ? <_VocaliaFormRow>[]
+          : existing.values
+              .map(
+                (value) => _VocaliaFormRow(
+                  valueId: value.id,
+                  concept: value.concept,
+                  amountText: _formatVocaliaAmount(value.amount),
+                ),
+              )
+              .toList();
+    }
+
+    var saving = false;
+    _isEditingObservationDialogOpen = true;
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            Widget buildTeamSection(String teamId) {
+              final rows = formRowsByTeam[teamId]!;
+              final teamLabel = _teamName(teamId);
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F172A),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      teamLabel,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    if (rows.isEmpty)
+                      const Text(
+                        'Sin conceptos. Agrega uno.',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                    ...rows.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final row = entry.value;
+                      return Padding(
+                        key: ValueKey(row.localId),
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            TextFormField(
+                              key: ValueKey('concept_${row.localId}'),
+                              initialValue: row.concept,
+                              enabled: !saving,
+                              maxLines: 1,
+                              decoration: const InputDecoration(
+                                labelText: 'Concepto',
+                              ),
+                              onChanged: (value) => row.concept = value,
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextFormField(
+                                    key: ValueKey('amount_${row.localId}'),
+                                    initialValue: row.amountText,
+                                    enabled: !saving,
+                                    maxLines: 1,
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
+                                    decoration: const InputDecoration(
+                                      labelText: 'Valor',
+                                    ),
+                                    onChanged: (value) => row.amountText = value,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                IconButton(
+                                  onPressed: saving
+                                      ? null
+                                      : () {
+                                          setDialogState(() {
+                                            if (row.valueId != null) {
+                                              deletedValueIdsByTeam[teamId]!
+                                                  .add(row.valueId!);
+                                            }
+                                            rows.removeAt(index);
+                                          });
+                                        },
+                                  icon: const Icon(Icons.delete_outline),
+                                  tooltip: 'Quitar fila',
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: saving
+                            ? null
+                            : () {
+                                setDialogState(() {
+                                  rows.add(_VocaliaFormRow());
+                                });
+                              },
+                        icon: const Icon(Icons.add),
+                        label: const Text('Agregar concepto'),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            return AlertDialog(
+              title: const Text('Agregar/Editar vocalias'),
+              content: SizedBox(
+                width: 720,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: teamIds.map(buildTeamSection).toList(),
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: saving
+                      ? null
+                      : () => Navigator.pop(dialogContext, false),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: saving
+                      ? null
+                      : () async {
+                          final operations = <Future<dynamic>>[];
+
+                          for (final teamId in teamIds) {
+                            for (final valueId in deletedValueIdsByTeam[teamId]!) {
+                              operations.add(
+                                _vocaliaService.deleteValueInMatchTeam(
+                                  matchId: _match.id,
+                                  teamId: teamId,
+                                  valueId: valueId,
+                                ),
+                              );
+                            }
+                          }
+
+                          for (final teamId in teamIds) {
+                            final rows = formRowsByTeam[teamId]!;
+                            for (final row in rows) {
+                              final concept = row.concept.trim();
+                              final amountRaw = row.amountText.trim();
+                              if (concept.isEmpty && amountRaw.isEmpty) {
+                                continue;
+                              }
+                              if (concept.isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Completa el concepto en ${_teamName(teamId)}.',
+                                    ),
+                                  ),
+                                );
+                                return;
+                              }
+
+                              final parsedAmount = double.tryParse(
+                                amountRaw.replaceAll(',', '.'),
+                              );
+                              if (parsedAmount == null) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Valor invalido en ${_teamName(teamId)} para "$concept".',
+                                    ),
+                                  ),
+                                );
+                                return;
+                              }
+
+                              if (row.valueId == null) {
+                                operations.add(
+                                  _vocaliaService.addValueToMatchTeam(
+                                    matchId: _match.id,
+                                    teamId: teamId,
+                                    concept: concept,
+                                    amount: parsedAmount,
+                                  ),
+                                );
+                              } else if (row.hasChangedComparedToOriginal()) {
+                                operations.add(
+                                  _vocaliaService.updateValueInMatchTeam(
+                                    matchId: _match.id,
+                                    teamId: teamId,
+                                    valueId: row.valueId!,
+                                    concept: concept,
+                                    amount: parsedAmount,
+                                  ),
+                                );
+                              }
+                            }
+                          }
+
+                          setDialogState(() => saving = true);
+                          try {
+                            for (final operation in operations) {
+                              await operation;
+                            }
+                            if (!mounted) return;
+                            Navigator.pop(dialogContext, true);
+                          } catch (e) {
+                            if (!mounted) return;
+                            final message =
+                                e.toString().replaceFirst('Exception: ', '');
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(message)),
+                            );
+                            setDialogState(() => saving = false);
+                          }
+                        },
+                  child: Text(saving ? 'Guardando...' : 'Guardar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    _isEditingObservationDialogOpen = false;
+    if (saved == true) {
+      await _loadVocalia();
+    }
   }
 
   Widget _buildVocaliaTeamsTables() {
@@ -2631,6 +2913,31 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
     return normalized == 'PLAYING' ||
         normalized == 'PLAYING_FIRST_HALF' ||
         normalized == 'PLAYING_SECOND_HALF';
+  }
+}
+
+class _VocaliaFormRow {
+  static int _nextLocalId = 0;
+  final int localId;
+  final String? valueId;
+  final String _initialConcept;
+  final String _initialAmountText;
+  String concept;
+  String amountText;
+
+  _VocaliaFormRow({
+    this.valueId,
+    String concept = '',
+    String amountText = '',
+  })  : localId = _nextLocalId++,
+        _initialConcept = concept.trim(),
+        _initialAmountText = amountText.trim(),
+        concept = concept,
+        amountText = amountText;
+
+  bool hasChangedComparedToOriginal() {
+    return concept.trim() != _initialConcept ||
+        amountText.trim() != _initialAmountText;
   }
 }
 
