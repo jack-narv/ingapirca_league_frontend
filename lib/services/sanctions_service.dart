@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../core/constants/environments.dart';
 import '../models/cards_summary.dart';
+import '../models/season_sanctions_overview.dart';
 import '../models/suspended_player.dart';
 import '../models/suspension_summary.dart';
 import 'auth_service.dart';
@@ -51,6 +52,34 @@ class SanctionsService {
 
     throw Exception(
       _extractErrorMessage(response, "Error cargando jugadores suspendidos"),
+    );
+  }
+
+  Future<SeasonSanctionsOverview> getSeasonOverview({
+    required String seasonId,
+    String? categoryId,
+    String? teamId,
+  }) async {
+    final query = <String, String>{};
+    if (categoryId != null && categoryId.isNotEmpty) {
+      query['categoryId'] = categoryId;
+    }
+    if (teamId != null && teamId.isNotEmpty) {
+      query['teamId'] = teamId;
+    }
+
+    final uri = Uri.parse(
+      "$baseUrl/sanctions/overview/season/$seasonId",
+    ).replace(queryParameters: query.isEmpty ? null : query);
+
+    final response = await http.get(uri);
+
+    if (response.statusCode == 200) {
+      return SeasonSanctionsOverview.fromJson(jsonDecode(response.body));
+    }
+
+    throw Exception(
+      _extractErrorMessage(response, "Error cargando resumen general"),
     );
   }
 
