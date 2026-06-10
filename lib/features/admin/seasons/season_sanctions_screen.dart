@@ -2,21 +2,11 @@ import 'package:flutter/material.dart';
 import '../../../core/navigation/season_bottom_nav.dart';
 import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../models/cards_summary.dart';
-import '../../../models/match.dart';
-import '../../../models/match_event.dart';
-import '../../../models/match_lineup.dart';
-import '../../../models/player.dart';
 import '../../../models/season.dart';
 import '../../../models/season_category.dart';
 import '../../../models/suspension_summary.dart';
 import '../../../models/team.dart';
-import '../../../services/match_events_service.dart';
-import '../../../services/match_lineups_service.dart';
-import '../../../services/matches_service.dart';
-import '../../../services/players_service.dart';
 import '../../../services/sanctions_service.dart';
-import '../../../services/seasons_service.dart';
-import '../../../services/teams_service.dart';
 
 class SeasonSanctionsScreen extends StatefulWidget {
   final Season season;
@@ -31,17 +21,15 @@ class SeasonSanctionsScreen extends StatefulWidget {
 }
 
 class _SeasonSanctionsScreenState extends State<SeasonSanctionsScreen> {
-  final MatchesService _matchesService = MatchesService();
-  final MatchEventsService _eventsService = MatchEventsService();
-  final MatchLineupsService _lineupsService = MatchLineupsService();
-  final TeamsService _teamsService = TeamsService();
-  final SeasonsService _seasonsService = SeasonsService();
-  final PlayersService _playersService = PlayersService();
   final SanctionsService _sanctionsService = SanctionsService();
 
-  late Future<_SanctionsData> _future;
-  late Future<List<CardsSummary>> _cardsFuture;
-  late Future<List<SuspensionSummary>> _suspensionsFuture;
+  late Future<void> _initialLoadFuture;
+  List<SeasonCategory> _categories = <SeasonCategory>[];
+  List<Team> _teams = <Team>[];
+  List<CardsSummary> _cardsSummary = <CardsSummary>[];
+  List<SuspensionSummary> _suspensionsSummary = <SuspensionSummary>[];
+  bool _cardsLoading = false;
+  bool _suspensionsLoading = false;
 
   String? _cardsCategoryId;
   String? _cardsTeamId;
@@ -52,83 +40,18 @@ class _SeasonSanctionsScreenState extends State<SeasonSanctionsScreen> {
   @override
   void initState() {
     super.initState();
-    _future = _loadData();
-    _cardsFuture = _loadCardsSummary();
-    _suspensionsFuture = _loadSuspensionsSummary();
+    _initialLoadFuture = _loadInitialData();
   }
 
-  Future<_SanctionsData> _loadData() async {
-    final matches = await _matchesService.getBySeason(widget.season.id);
-
-    List<Team> teams = <Team>[];
-    List<SeasonCategory> categories = <SeasonCategory>[];
-    List<Player> players = <Player>[];
-
-    try {
-      teams = await _teamsService.getBySeason(widget.season.id);
-    } catch (_) {}
-
-    try {
-      categories = await _seasonsService.getCategoriesBySeason(widget.season.id);
-    } catch (_) {}
-
-    try {
-      players = await _playersService.getAllPlayers();
-    } catch (_) {}
-
-    final timelines = await Future.wait(
-      matches.map((m) async {
-        try {
-          return await _eventsService.getTimeline(m.id);
-        } catch (_) {
-          return <MatchEvent>[];
-        }
-      }),
+  Future<void> _loadInitialData() async {
+    final overview = await _sanctionsService.getSeasonOverview(
+      seasonId: widget.season.id,
     );
 
-    final lineupSnapshots = <_LineupShirtSnapshot>[];
-    for (final match in matches) {
-      final home = await _safeGetLineup(match.id, match.homeTeamId);
-      final away = await _safeGetLineup(match.id, match.awayTeamId);
-      lineupSnapshots.addAll(
-        home.map(
-          (p) => _LineupShirtSnapshot(
-            matchId: match.id,
-            playerId: p.playerId,
-            shirtNumber: p.shirtNumber,
-          ),
-        ),
-      );
-      lineupSnapshots.addAll(
-        away.map(
-          (p) => _LineupShirtSnapshot(
-            matchId: match.id,
-            playerId: p.playerId,
-            shirtNumber: p.shirtNumber,
-          ),
-        ),
-      );
-    }
-
-    return _SanctionsData(
-      matches: matches,
-      teams: teams,
-      categories: categories,
-      players: players,
-      events: timelines.expand((e) => e).toList(),
-      lineupShirts: lineupSnapshots,
-    );
-  }
-
-  Future<List<MatchLineupPlayer>> _safeGetLineup(
-    String matchId,
-    String teamId,
-  ) async {
-    try {
-      return await _lineupsService.getLineup(matchId, teamId);
-    } catch (_) {
-      return <MatchLineupPlayer>[];
-    }
+    _categories = overview.categories;
+    _teams = overview.teams;
+    _cardsSummary = overview.cardsSummary;
+    _suspensionsSummary = overview.suspensionsSummary;
   }
 
   Future<List<SuspensionSummary>> _loadSuspensionsSummary() {
@@ -147,6 +70,44 @@ class _SeasonSanctionsScreenState extends State<SeasonSanctionsScreen> {
     );
   }
 
+  Future<void> _refreshCardsSummary() async {
+    setState(() {
+      _cardsLoading = true;
+    });
+
+    try {
+      final summary = await _loadCardsSummary();
+      if (!mounted) return;
+      setState(() {
+        _cardsSummary = summary;
+      });
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _cardsLoading = false;
+      });
+    }
+  }
+
+  Future<void> _refreshSuspensionsSummary() async {
+    setState(() {
+      _suspensionsLoading = true;
+    });
+
+    try {
+      final summary = await _loadSuspensionsSummary();
+      if (!mounted) return;
+      setState(() {
+        _suspensionsSummary = summary;
+      });
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _suspensionsLoading = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AppScaffoldWithNav(
@@ -160,14 +121,14 @@ class _SeasonSanctionsScreenState extends State<SeasonSanctionsScreen> {
         seasonId: widget.season.id,
         seasonName: widget.season.name,
       ),
-      body: FutureBuilder<_SanctionsData>(
-        future: _future,
+      body: FutureBuilder<void>(
+        future: _initialLoadFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          if (snapshot.hasError || !snapshot.hasData) {
+          if (snapshot.hasError) {
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
@@ -188,9 +149,7 @@ class _SeasonSanctionsScreenState extends State<SeasonSanctionsScreen> {
                     ElevatedButton(
                       onPressed: () {
                         setState(() {
-                          _future = _loadData();
-                          _cardsFuture = _loadCardsSummary();
-                          _suspensionsFuture = _loadSuspensionsSummary();
+                          _initialLoadFuture = _loadInitialData();
                         });
                       },
                       child: const Text("Reintentar"),
@@ -200,8 +159,6 @@ class _SeasonSanctionsScreenState extends State<SeasonSanctionsScreen> {
               ),
             );
           }
-
-          final vm = _SanctionsViewModel.fromData(snapshot.data!);
 
           return DefaultTabController(
             length: 2,
@@ -216,16 +173,16 @@ class _SeasonSanctionsScreenState extends State<SeasonSanctionsScreen> {
                   child: const TabBar(
                     indicatorSize: TabBarIndicatorSize.tab,
                     tabs: [
-                      Tab(text: "TARJETAS"),
                       Tab(text: "SUSPENSIONES"),
+                      Tab(text: "TARJETAS"),
                     ],
                   ),
                 ),
                 Expanded(
                   child: TabBarView(
                     children: [
-                      _buildCardsTab(vm),
-                      _buildSuspensionsTab(vm),
+                      _buildSuspensionsTab(),
+                      _buildCardsTab(),
                     ],
                   ),
                 ),
@@ -237,9 +194,9 @@ class _SeasonSanctionsScreenState extends State<SeasonSanctionsScreen> {
     );
   }
 
-  Widget _buildCardsTab(_SanctionsViewModel vm) {
+  Widget _buildCardsTab() {
     final availableTeams = _availableTeams(
-      vm.teams,
+      _teams,
       selectedCategoryId: _cardsCategoryId,
     );
     final safeTeamId =
@@ -265,7 +222,7 @@ class _SeasonSanctionsScreenState extends State<SeasonSanctionsScreen> {
                     value: null,
                     child: Text("Todas las categorias"),
                   ),
-                  ...vm.categories.map(
+                  ..._categories.map(
                     (c) => DropdownMenuItem<String?>(
                       value: c.id,
                       child: Text(c.name),
@@ -273,17 +230,17 @@ class _SeasonSanctionsScreenState extends State<SeasonSanctionsScreen> {
                   ),
                 ],
                 onChanged: (value) {
+                  final stillValid = _availableTeams(
+                    _teams,
+                    selectedCategoryId: value,
+                  ).any((t) => t.id == _cardsTeamId);
                   setState(() {
                     _cardsCategoryId = value;
-                    final stillValid = _availableTeams(
-                      vm.teams,
-                      selectedCategoryId: value,
-                    ).any((t) => t.id == _cardsTeamId);
                     if (!stillValid) {
                       _cardsTeamId = null;
                     }
-                    _cardsFuture = _loadCardsSummary();
                   });
+                  _refreshCardsSummary();
                 },
               ),
               const SizedBox(height: 10),
@@ -303,106 +260,97 @@ class _SeasonSanctionsScreenState extends State<SeasonSanctionsScreen> {
                     ),
                   ),
                 ],
-                onChanged: (value) => setState(() {
-                  _cardsTeamId = value;
-                  _cardsFuture = _loadCardsSummary();
-                }),
+                onChanged: (value) {
+                  setState(() {
+                    _cardsTeamId = value;
+                  });
+                  _refreshCardsSummary();
+                },
               ),
             ],
           ),
         ),
         const SizedBox(height: 16),
-        FutureBuilder<List<CardsSummary>>(
-          future: _cardsFuture,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState != ConnectionState.done) {
-              return const Padding(
-                padding: EdgeInsets.only(top: 24),
-                child: Center(child: CircularProgressIndicator()),
-              );
-            }
-
-            final rows = snapshot.data ?? <CardsSummary>[];
-            final tableRows = rows
-                .map(
-                  (item) => _CardsSummaryRow(
-                    playerId: item.playerId,
-                    playerName: item.fullName.isEmpty ? item.playerId : item.fullName,
-                    teamName: (item.teamName ?? '').trim().isNotEmpty
-                        ? (item.teamName ?? '').trim()
-                        : _resolvePlayerTeamName(
-                            vm,
-                            playerId: item.playerId,
-                            shirtNumber: item.shirtNumber,
-                            sourceRows: vm.cardEvents,
-                            selectedCategoryId: _cardsCategoryId,
-                            selectedTeamId: _cardsTeamId,
-                          ),
-                    shirtNumber: item.shirtNumber,
-                    yellowCards: item.yellowCards,
-                    redDirectCards: item.redDirectCards,
-                  ),
-                )
-                .toList();
-            final yellowCount =
-                rows.fold<int>(0, (acc, item) => acc + item.yellowCards);
-            final redDirectCount = rows.fold<int>(
-              0,
-              (acc, item) => acc + item.redDirectCards,
-            );
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    _MetricCard(
-                      label: "Jugadores con tarjetas",
-                      value: "${rows.length}",
-                      icon: Icons.style,
-                    ),
-                    _MetricCard(
-                      label: "Amarillas",
-                      value: "$yellowCount",
-                      icon: Icons.square_rounded,
-                    ),
-                    _MetricCard(
-                      label: "Rojas directas",
-                      value: "$redDirectCount",
-                      icon: Icons.stop_rounded,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                const _SectionTitle(title: "Registro de tarjetas"),
-                const SizedBox(height: 10),
-                if (rows.isEmpty)
-                  const _ChartCard(
-                    child: Text(
-                      "No hay tarjetas para los filtros seleccionados",
-                      style: TextStyle(color: Colors.white70),
-                    ),
-                  )
-                else
-                  _ModernTableCard(
-                    title: "Resumen de tarjetas",
-                    subtitle:
-                        "Suma de YELLOW y RED_DIRECT por jugador",
-                    child: _CardsSummaryTable(entries: tableRows),
-                  ),
-              ],
-            );
-          },
-        ),
+        if (_cardsLoading)
+          const Padding(
+            padding: EdgeInsets.only(top: 24),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else
+          _buildCardsContent(_cardsSummary),
       ],
     );
   }
 
-  Widget _buildSuspensionsTab(_SanctionsViewModel vm) {
+  Widget _buildCardsContent(List<CardsSummary> rows) {
+    final tableRows = rows
+        .map(
+          (item) => _CardsSummaryRow(
+            playerId: item.playerId,
+            playerName: item.fullName.isEmpty ? item.playerId : item.fullName,
+            teamName: (item.teamName ?? '').trim().isNotEmpty
+                ? (item.teamName ?? '').trim()
+                : 'Sin equipo',
+            shirtNumber: item.shirtNumber,
+            yellowCards: item.yellowCards,
+            redDirectCards: item.redDirectCards,
+          ),
+        )
+        .toList();
+    final yellowCount =
+        rows.fold<int>(0, (acc, item) => acc + item.yellowCards);
+    final redDirectCount = rows.fold<int>(
+      0,
+      (acc, item) => acc + item.redDirectCards,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            _MetricCard(
+              label: "Jugadores con tarjetas",
+              value: "${rows.length}",
+              icon: Icons.style,
+            ),
+            _MetricCard(
+              label: "Amarillas",
+              value: "$yellowCount",
+              icon: Icons.square_rounded,
+            ),
+            _MetricCard(
+              label: "Rojas directas",
+              value: "$redDirectCount",
+              icon: Icons.stop_rounded,
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        const _SectionTitle(title: "Registro de tarjetas"),
+        const SizedBox(height: 10),
+        if (rows.isEmpty)
+          const _ChartCard(
+            child: Text(
+              "No hay tarjetas para los filtros seleccionados",
+              style: TextStyle(color: Colors.white70),
+            ),
+          )
+        else
+          _ModernTableCard(
+            title: "Resumen de tarjetas",
+            subtitle: "Suma de amarilla y roja directa por jugador",
+            child: _CardsSummaryTable(entries: tableRows),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildSuspensionsTab() {
     final availableTeams = _availableTeams(
-      vm.teams,
+      _teams,
       selectedCategoryId: _suspensionsCategoryId,
     );
     final safeTeamId = availableTeams.any((t) => t.id == _suspensionsTeamId)
@@ -429,7 +377,7 @@ class _SeasonSanctionsScreenState extends State<SeasonSanctionsScreen> {
                     value: null,
                     child: Text("Todas las categorias"),
                   ),
-                  ...vm.categories.map(
+                  ..._categories.map(
                     (c) => DropdownMenuItem<String?>(
                       value: c.id,
                       child: Text(c.name),
@@ -437,17 +385,17 @@ class _SeasonSanctionsScreenState extends State<SeasonSanctionsScreen> {
                   ),
                 ],
                 onChanged: (value) {
+                  final stillValid = _availableTeams(
+                    _teams,
+                    selectedCategoryId: value,
+                  ).any((t) => t.id == _suspensionsTeamId);
                   setState(() {
                     _suspensionsCategoryId = value;
-                    final stillValid = _availableTeams(
-                      vm.teams,
-                      selectedCategoryId: value,
-                    ).any((t) => t.id == _suspensionsTeamId);
                     if (!stillValid) {
                       _suspensionsTeamId = null;
                     }
-                    _suspensionsFuture = _loadSuspensionsSummary();
                   });
+                  _refreshSuspensionsSummary();
                 },
               ),
               const SizedBox(height: 10),
@@ -467,92 +415,83 @@ class _SeasonSanctionsScreenState extends State<SeasonSanctionsScreen> {
                     ),
                   ),
                 ],
-                onChanged: (value) =>
-                    setState(() {
-                      _suspensionsTeamId = value;
-                      _suspensionsFuture = _loadSuspensionsSummary();
-                    }),
+                onChanged: (value) {
+                  setState(() {
+                    _suspensionsTeamId = value;
+                  });
+                  _refreshSuspensionsSummary();
+                },
               ),
             ],
           ),
         ),
         const SizedBox(height: 16),
-        FutureBuilder<List<SuspensionSummary>>(
-          future: _suspensionsFuture,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState != ConnectionState.done) {
-              return const Padding(
-                padding: EdgeInsets.only(top: 24),
-                child: Center(child: CircularProgressIndicator()),
-              );
-            }
+        if (_suspensionsLoading)
+          const Padding(
+            padding: EdgeInsets.only(top: 24),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else
+          _buildSuspensionsContent(_suspensionsSummary),
+      ],
+    );
+  }
 
-            final summary = snapshot.data ?? <SuspensionSummary>[];
-            final rows = summary
-                .map(
-                  (s) => _SuspensionSummaryRow(
-                    playerId: s.playerId,
-                    playerName: s.fullName.isEmpty ? s.playerId : s.fullName,
-                    teamName: (s.teamName ?? '').trim().isNotEmpty
-                        ? (s.teamName ?? '').trim()
-                        : _resolvePlayerTeamName(
-                            vm,
-                            playerId: s.playerId,
-                            shirtNumber: s.shirtNumber,
-                            sourceRows: vm.suspensions,
-                            selectedCategoryId: _suspensionsCategoryId,
-                            selectedTeamId: _suspensionsTeamId,
-                          ),
-                    shirtNumber: s.shirtNumber,
-                    totalMatchesSuspended: s.pendingMatchesSuspended,
-                  ),
-                )
-                .toList();
+  Widget _buildSuspensionsContent(List<SuspensionSummary> summary) {
+    final rows = summary
+        .map(
+          (s) => _SuspensionSummaryRow(
+            playerId: s.playerId,
+            playerName: s.fullName.isEmpty ? s.playerId : s.fullName,
+            teamName: (s.teamName ?? '').trim().isNotEmpty
+                ? (s.teamName ?? '').trim()
+                : 'Sin equipo',
+            shirtNumber: s.shirtNumber,
+            totalMatchesSuspended: s.pendingMatchesSuspended,
+          ),
+        )
+        .toList();
 
-            final totalMatchesAffected = rows.fold<int>(
-              0,
-              (acc, item) => acc + item.totalMatchesSuspended,
-            );
+    final totalMatchesAffected = rows.fold<int>(
+      0,
+      (acc, item) => acc + item.totalMatchesSuspended,
+    );
 
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    _MetricCard(
-                      label: "Jugadores suspendidos",
-                      value: "${rows.length}",
-                      icon: Icons.gavel,
-                    ),
-                    _MetricCard(
-                      label: "Partidos pendientes",
-                      value: "$totalMatchesAffected",
-                      icon: Icons.confirmation_number,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                const _SectionTitle(title: "Registro de suspensiones"),
-                const SizedBox(height: 10),
-                if (rows.isEmpty)
-                  const _ChartCard(
-                    child: Text(
-                      "No hay suspensiones para los filtros seleccionados",
-                      style: TextStyle(color: Colors.white70),
-                    ),
-                  )
-                else
-                  _ModernTableCard(
-                    title: "Resumen de suspensiones",
-                    subtitle: "Partidos pendientes por cumplir por jugador",
-                    child: _SuspensionsSummaryTable(entries: rows),
-                  ),
-              ],
-            );
-          },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            _MetricCard(
+              label: "Jugadores suspendidos",
+              value: "${rows.length}",
+              icon: Icons.gavel,
+            ),
+            _MetricCard(
+              label: "Partidos pendientes",
+              value: "$totalMatchesAffected",
+              icon: Icons.confirmation_number,
+            ),
+          ],
         ),
+        const SizedBox(height: 16),
+        const _SectionTitle(title: "Registro de suspensiones"),
+        const SizedBox(height: 10),
+        if (rows.isEmpty)
+          const _ChartCard(
+            child: Text(
+              "No hay suspensiones para los filtros seleccionados",
+              style: TextStyle(color: Colors.white70),
+            ),
+          )
+        else
+          _ModernTableCard(
+            title: "Resumen de suspensiones",
+            subtitle: "Partidos pendientes por cumplir por jugador",
+            child: _SuspensionsSummaryTable(entries: rows),
+          ),
       ],
     );
   }
@@ -568,172 +507,6 @@ class _SeasonSanctionsScreenState extends State<SeasonSanctionsScreen> {
     return teams.where((t) => t.categoryId == selectedCategoryId).toList();
   }
 
-  String _resolvePlayerTeamName(
-    _SanctionsViewModel vm, {
-    required String playerId,
-    required int? shirtNumber,
-    required Iterable<_HasTeamPlayerCategory> sourceRows,
-    required String? selectedCategoryId,
-    required String? selectedTeamId,
-  }) {
-    if (selectedTeamId != null && selectedTeamId.isNotEmpty) {
-      final selectedTeamMatches =
-          vm.teams.where((t) => t.id == selectedTeamId).toList();
-      if (selectedTeamMatches.isNotEmpty) {
-        return selectedTeamMatches.first.name;
-      }
-    }
-
-    final teamByFrequency = <String, int>{};
-    for (final row in sourceRows) {
-      if (row.playerId != playerId) continue;
-      if (shirtNumber != null && row.shirtNumber != null && row.shirtNumber != shirtNumber) {
-        continue;
-      }
-      if (selectedCategoryId != null && row.categoryId != selectedCategoryId) {
-        continue;
-      }
-      if (selectedTeamId != null && row.teamId != selectedTeamId) {
-        continue;
-      }
-      final name = row.teamName.trim();
-      if (name.isEmpty || name == 'Sin equipo') continue;
-      teamByFrequency[name] = (teamByFrequency[name] ?? 0) + 1;
-    }
-    if (teamByFrequency.isNotEmpty) {
-      final ordered = teamByFrequency.entries.toList()
-        ..sort((a, b) => b.value.compareTo(a.value));
-      return ordered.first.key;
-    }
-
-    final playerMatches = vm.players.where((p) => p.id == playerId).toList();
-    if (playerMatches.isEmpty) {
-      return "Sin equipo";
-    }
-    final player = playerMatches.first;
-
-    final teamsById = {for (final t in vm.teams) t.id: t};
-    final candidateNames = player.teamInfo
-        .where((info) {
-          if (info.teamId.isEmpty) return false;
-          if (shirtNumber != null && info.shirtNumber != shirtNumber) return false;
-          final team = teamsById[info.teamId];
-          if (team == null) {
-            return selectedTeamId == null || selectedTeamId == info.teamId;
-          }
-          if (selectedCategoryId == null) return true;
-          return team.categoryId == selectedCategoryId;
-        })
-        .map((info) => info.teamName.trim().isNotEmpty
-            ? info.teamName
-            : (teamsById[info.teamId]?.name ?? ''))
-        .where((name) => name.trim().isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
-
-    if (candidateNames.isEmpty) {
-      return "Sin equipo";
-    }
-
-    return candidateNames.join(', ');
-  }
-}
-
-class _SanctionsData {
-  final List<Match> matches;
-  final List<Team> teams;
-  final List<SeasonCategory> categories;
-  final List<Player> players;
-  final List<MatchEvent> events;
-  final List<_LineupShirtSnapshot> lineupShirts;
-
-  _SanctionsData({
-    required this.matches,
-    required this.teams,
-    required this.categories,
-    required this.players,
-    required this.events,
-    required this.lineupShirts,
-  });
-}
-
-class _LineupShirtSnapshot {
-  final String matchId;
-  final String playerId;
-  final int shirtNumber;
-
-  _LineupShirtSnapshot({
-    required this.matchId,
-    required this.playerId,
-    required this.shirtNumber,
-  });
-}
-
-abstract class _HasTeamPlayerCategory {
-  String get playerId;
-  String get teamId;
-  String get teamName;
-  String get categoryId;
-  int? get shirtNumber;
-}
-
-class _CardEventRow implements _HasTeamPlayerCategory {
-  final String matchId;
-  final DateTime matchDate;
-  final String categoryId;
-  final String categoryName;
-  final String teamId;
-  final String teamName;
-  final String playerId;
-  final String playerName;
-  final int? shirtNumber;
-  final String minute;
-  final String eventType;
-
-  _CardEventRow({
-    required this.matchId,
-    required this.matchDate,
-    required this.categoryId,
-    required this.categoryName,
-    required this.teamId,
-    required this.teamName,
-    required this.playerId,
-    required this.playerName,
-    required this.shirtNumber,
-    required this.minute,
-    required this.eventType,
-  });
-}
-
-class _SuspensionRow implements _HasTeamPlayerCategory {
-  final String matchId;
-  final DateTime matchDate;
-  final String categoryId;
-  final String categoryName;
-  final String teamId;
-  final String teamName;
-  final String playerId;
-  final String playerName;
-  final int? shirtNumber;
-  final int matchesAffected;
-  final String reason;
-  final String minute;
-
-  _SuspensionRow({
-    required this.matchId,
-    required this.matchDate,
-    required this.categoryId,
-    required this.categoryName,
-    required this.teamId,
-    required this.teamName,
-    required this.playerId,
-    required this.playerName,
-    required this.shirtNumber,
-    required this.matchesAffected,
-    required this.reason,
-    required this.minute,
-  });
 }
 
 class _SuspensionSummaryRow {
@@ -750,241 +523,6 @@ class _SuspensionSummaryRow {
     required this.shirtNumber,
     required this.totalMatchesSuspended,
   });
-}
-
-class _SanctionsViewModel {
-  final List<SeasonCategory> categories;
-  final List<Team> teams;
-  final List<Player> players;
-  final List<_CardEventRow> cardEvents;
-  final List<_SuspensionRow> suspensions;
-  final Map<String, int> cardTypeCounts;
-
-  _SanctionsViewModel({
-    required this.categories,
-    required this.teams,
-    required this.players,
-    required this.cardEvents,
-    required this.suspensions,
-    required this.cardTypeCounts,
-  });
-
-  factory _SanctionsViewModel.fromData(_SanctionsData data) {
-    final teamById = {for (final team in data.teams) team.id: team};
-    final playerById = {for (final p in data.players) p.id: p};
-    final categoryById = {for (final c in data.categories) c.id: c};
-    final matchById = {for (final m in data.matches) m.id: m};
-    final lineupShirtByMatchPlayer = <String, int>{
-      for (final s in data.lineupShirts) '${s.matchId}_${s.playerId}': s.shirtNumber,
-    };
-
-    final cardEvents = <_CardEventRow>[];
-    final cardTypeCounts = <String, int>{};
-
-    for (final event in data.events) {
-      if (!_isCardEvent(event.eventType)) {
-        continue;
-      }
-
-      final match = matchById[event.matchId];
-      if (match == null) {
-        continue;
-      }
-
-      final categoryId = match.categoryId ?? '';
-      final categoryName = categoryById[categoryId]?.name ?? 'Sin categoria';
-      final teamName = teamById[event.teamId]?.name ?? 'Sin equipo';
-      final fallbackPlayer = playerById[event.playerId];
-      final playerName = (event.playerName ?? '').trim().isNotEmpty
-          ? (event.playerName ?? '').trim()
-          : fallbackPlayer != null
-              ? '${fallbackPlayer.firstName} ${fallbackPlayer.lastName}'.trim()
-              : event.playerId;
-      final lineupShirt =
-          lineupShirtByMatchPlayer['${event.matchId}_${event.playerId}'];
-      int? fallbackShirt;
-      if (fallbackPlayer != null) {
-        for (final teamInfo in fallbackPlayer.teamInfo) {
-          if (teamInfo.teamId == event.teamId) {
-            fallbackShirt = teamInfo.shirtNumber;
-            break;
-          }
-        }
-      }
-
-      cardEvents.add(
-        _CardEventRow(
-          matchId: event.matchId,
-          matchDate: match.matchDate,
-          categoryId: categoryId,
-          categoryName: categoryName,
-          teamId: event.teamId,
-          teamName: teamName,
-          playerId: event.playerId,
-          playerName: playerName,
-          shirtNumber: event.shirtNumber ?? lineupShirt ?? fallbackShirt,
-          minute: event.minute,
-          eventType: event.eventType,
-        ),
-      );
-
-      cardTypeCounts[event.eventType] = (cardTypeCounts[event.eventType] ?? 0) + 1;
-    }
-
-    cardEvents.sort((a, b) {
-      final dateSort = b.matchDate.compareTo(a.matchDate);
-      if (dateSort != 0) return dateSort;
-      return _minuteSortValue(b.minute).compareTo(_minuteSortValue(a.minute));
-    });
-
-    final suspensions = _computeSuspensions(cardEvents);
-    suspensions.sort((a, b) {
-      final dateSort = b.matchDate.compareTo(a.matchDate);
-      if (dateSort != 0) return dateSort;
-      return _minuteSortValue(b.minute).compareTo(_minuteSortValue(a.minute));
-    });
-
-    final categoriesSorted = [...data.categories]
-      ..sort((a, b) => a.name.compareTo(b.name));
-    final teamsSorted = [...data.teams]..sort((a, b) => a.name.compareTo(b.name));
-
-    return _SanctionsViewModel(
-      categories: categoriesSorted,
-      teams: teamsSorted,
-      players: data.players,
-      cardEvents: cardEvents,
-      suspensions: suspensions,
-      cardTypeCounts: cardTypeCounts,
-    );
-  }
-
-  static bool _isCardEvent(String type) {
-    return type == 'YELLOW' ||
-        type == 'RED_DIRECT' ||
-        type == 'DOBLE_YELLOW_RED';
-  }
-
-  static List<_SuspensionRow> _computeSuspensions(List<_CardEventRow> cardEvents) {
-    final ordered = [...cardEvents]
-      ..sort((a, b) {
-        final dateSort = a.matchDate.compareTo(b.matchDate);
-        if (dateSort != 0) return dateSort;
-        return _minuteSortValue(a.minute).compareTo(_minuteSortValue(b.minute));
-      });
-
-    final seasonYellowCountByPlayer = <String, int>{};
-    final yellowsInMatchByPlayer = <String, int>{};
-    final suspensions = <_SuspensionRow>[];
-
-    for (final event in ordered) {
-      if (event.eventType == 'RED_DIRECT') {
-        suspensions.add(
-          _SuspensionRow(
-            matchId: event.matchId,
-            matchDate: event.matchDate,
-            categoryId: event.categoryId,
-            categoryName: event.categoryName,
-            teamId: event.teamId,
-            teamName: event.teamName,
-            playerId: event.playerId,
-            playerName: event.playerName,
-            shirtNumber: event.shirtNumber,
-            matchesAffected: 2,
-            reason: 'Roja directa',
-            minute: event.minute,
-          ),
-        );
-        continue;
-      }
-
-      if (event.eventType == 'DOBLE_YELLOW_RED') {
-        suspensions.add(
-          _SuspensionRow(
-            matchId: event.matchId,
-            matchDate: event.matchDate,
-            categoryId: event.categoryId,
-            categoryName: event.categoryName,
-            teamId: event.teamId,
-            teamName: event.teamName,
-            playerId: event.playerId,
-            playerName: event.playerName,
-            shirtNumber: event.shirtNumber,
-            matchesAffected: 1,
-            reason: 'Doble amarilla en el mismo partido',
-            minute: event.minute,
-          ),
-        );
-        continue;
-      }
-
-      if (event.eventType != 'YELLOW') {
-        continue;
-      }
-
-      final matchKey = '${event.matchId}_${event.playerId}';
-      final inMatch = (yellowsInMatchByPlayer[matchKey] ?? 0) + 1;
-      yellowsInMatchByPlayer[matchKey] = inMatch;
-
-      final inSeason = (seasonYellowCountByPlayer[event.playerId] ?? 0) + 1;
-      seasonYellowCountByPlayer[event.playerId] = inSeason;
-
-      if (inMatch == 2) {
-        suspensions.add(
-          _SuspensionRow(
-            matchId: event.matchId,
-            matchDate: event.matchDate,
-            categoryId: event.categoryId,
-            categoryName: event.categoryName,
-            teamId: event.teamId,
-            teamName: event.teamName,
-            playerId: event.playerId,
-            playerName: event.playerName,
-            shirtNumber: event.shirtNumber,
-            matchesAffected: 1,
-            reason: 'Dos amarillas en el mismo partido',
-            minute: event.minute,
-          ),
-        );
-        continue;
-      }
-
-      if (inSeason % 5 == 0) {
-        suspensions.add(
-          _SuspensionRow(
-            matchId: event.matchId,
-            matchDate: event.matchDate,
-            categoryId: event.categoryId,
-            categoryName: event.categoryName,
-            teamId: event.teamId,
-            teamName: event.teamName,
-            playerId: event.playerId,
-            playerName: event.playerName,
-            shirtNumber: event.shirtNumber,
-            matchesAffected: 1,
-            reason: 'Acumulacion de tarjetas amarillas',
-            minute: event.minute,
-          ),
-        );
-      }
-    }
-
-    return suspensions;
-  }
-
-  static int _minuteSortValue(String minuteText) {
-    final value = minuteText.trim();
-    final match = RegExp(r'^(\d+)\s*([12])t$', caseSensitive: false).firstMatch(value);
-
-    if (match == null) {
-      final numeric = int.tryParse(value);
-      return numeric ?? 9999;
-    }
-
-    final minute = int.tryParse(match.group(1) ?? '') ?? 0;
-    final half = int.tryParse(match.group(2) ?? '') ?? 1;
-    return half == 1 ? minute : 1000 + minute;
-  }
-
 }
 
 class _CardsSummaryRow {
@@ -1160,57 +698,41 @@ class _CardsSummaryTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minWidth: constraints.maxWidth),
-            child: DataTable(
-              headingRowHeight: 36,
-              dataRowMinHeight: 36,
-              dataRowMaxHeight: 46,
-              horizontalMargin: 8,
-              columnSpacing: 10,
-              columns: const [
-                DataColumn(label: Text("Jugador")),
-                DataColumn(label: Text("Equipo")),
-                DataColumn(label: Text("Dorsal")),
-                DataColumn(label: Text("YELLOW")),
-                DataColumn(label: Text("RED_DIRECT")),
-              ],
-              rows: entries.map((entry) {
-                return DataRow(
-                  cells: [
-                    DataCell(
-                      SizedBox(
-                        width: 105,
-                        child: Text(
-                          entry.playerName,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ),
-                    DataCell(
-                      SizedBox(
-                        width: 95,
-                        child: Text(
-                          entry.teamName,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ),
-                    DataCell(Text(entry.shirtNumber?.toString() ?? "--")),
-                    DataCell(Text('${entry.yellowCards}')),
-                    DataCell(Text('${entry.redDirectCards}')),
-                  ],
-                );
-              }).toList(),
-            ),
+    return Column(
+      children: [
+        const _CompactTableHeader(
+          children: [
+            _CompactCell(text: "Jugador", flex: 30, isHeader: true),
+            _CompactCell(text: "Equipo", flex: 22, isHeader: true),
+            _CompactCell(text: "Dorsal", flex: 14, isHeader: true, align: TextAlign.center),
+            _CompactCell(text: "Amarilla", flex: 18, isHeader: true, align: TextAlign.center),
+            _CompactCell(text: "Roja", flex: 16, isHeader: true, align: TextAlign.center),
+          ],
+        ),
+        ...entries.map(
+          (entry) => _CompactTableRow(
+            children: [
+              _CompactCell(text: entry.playerName, flex: 30),
+              _CompactCell(text: entry.teamName, flex: 22),
+              _CompactCell(
+                text: entry.shirtNumber?.toString() ?? "--",
+                flex: 14,
+                align: TextAlign.center,
+              ),
+              _CompactCell(
+                text: '${entry.yellowCards}',
+                flex: 18,
+                align: TextAlign.center,
+              ),
+              _CompactCell(
+                text: '${entry.redDirectCards}',
+                flex: 16,
+                align: TextAlign.center,
+              ),
+            ],
           ),
-        );
-      },
+        ),
+      ],
     );
   }
 }
@@ -1222,55 +744,111 @@ class _SuspensionsSummaryTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minWidth: constraints.maxWidth),
-            child: DataTable(
-              headingRowHeight: 36,
-              dataRowMinHeight: 36,
-              dataRowMaxHeight: 46,
-              horizontalMargin: 8,
-              columnSpacing: 10,
-              columns: const [
-                DataColumn(label: Text("Jugador")),
-                DataColumn(label: Text("Equipo")),
-                DataColumn(label: Text("Dorsal")),
-                DataColumn(label: Text("Pendientes")),
-              ],
-              rows: entries.map((entry) {
-                return DataRow(
-                  cells: [
-                    DataCell(
-                      SizedBox(
-                        width: 110,
-                        child: Text(
-                          entry.playerName,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ),
-                    DataCell(
-                      SizedBox(
-                        width: 95,
-                        child: Text(
-                          entry.teamName,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ),
-                    DataCell(Text(entry.shirtNumber?.toString() ?? "--")),
-                    DataCell(Text("${entry.totalMatchesSuspended}")),
-                  ],
-                );
-              }).toList(),
-            ),
+    return Column(
+      children: [
+        const _CompactTableHeader(
+          children: [
+            _CompactCell(text: "Jugador", flex: 34, isHeader: true),
+            _CompactCell(text: "Equipo", flex: 22, isHeader: true),
+            _CompactCell(text: "Dorsal", flex: 14, isHeader: true, align: TextAlign.center),
+            _CompactCell(text: "Pendientes", flex: 30, isHeader: true, align: TextAlign.center),
+          ],
+        ),
+        ...entries.map(
+          (entry) => _CompactTableRow(
+            children: [
+              _CompactCell(text: entry.playerName, flex: 34),
+              _CompactCell(text: entry.teamName, flex: 22),
+              _CompactCell(
+                text: entry.shirtNumber?.toString() ?? "--",
+                flex: 14,
+                align: TextAlign.center,
+              ),
+              _CompactCell(
+                text: "${entry.totalMatchesSuspended}",
+                flex: 30,
+                align: TextAlign.center,
+              ),
+            ],
           ),
-        );
-      },
+        ),
+      ],
+    );
+  }
+}
+
+class _CompactTableHeader extends StatelessWidget {
+  final List<Widget> children;
+
+  const _CompactTableHeader({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.only(bottom: 8),
+      decoration: const BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: Colors.white70, width: 1),
+        ),
+      ),
+      child: Row(children: children),
+    );
+  }
+}
+
+class _CompactTableRow extends StatelessWidget {
+  final List<Widget> children;
+
+  const _CompactTableRow({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: const BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: Colors.white24, width: 0.8),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: children,
+      ),
+    );
+  }
+}
+
+class _CompactCell extends StatelessWidget {
+  final String text;
+  final int flex;
+  final bool isHeader;
+  final TextAlign align;
+
+  const _CompactCell({
+    required this.text,
+    required this.flex,
+    this.isHeader = false,
+    this.align = TextAlign.left,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      flex: flex,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: Text(
+          text,
+          textAlign: align,
+          softWrap: true,
+          style: TextStyle(
+            fontSize: isHeader ? 9.5 : 9.5,
+            fontWeight: isHeader ? FontWeight.w600 : FontWeight.w400,
+            color: isHeader ? Colors.white : Colors.white.withValues(alpha: 0.92),
+            height: 1.15,
+          ),
+        ),
+      ),
     );
   }
 }
