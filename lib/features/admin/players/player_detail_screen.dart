@@ -4,12 +4,11 @@ import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../models/player.dart';
 import '../../../models/match_event.dart';
 import '../../../models/match_lineup.dart';
-import '../../../models/player_statistics.dart';
 import '../../../services/match_events_service.dart';
 import '../../../services/match_lineups_service.dart';
 import '../../../services/matches_service.dart';
-import '../../../services/player_statistics_service.dart';
 import '../../../services/players_service.dart';
+import '../../../services/season_statistics_service.dart';
 
 class PlayerDetailScreen extends StatefulWidget {
   final String playerId;
@@ -36,8 +35,8 @@ class _PlayerDetailScreenState
   final MatchesService _matchesService = MatchesService();
   final MatchLineupsService _lineupsService = MatchLineupsService();
   final MatchEventsService _eventsService = MatchEventsService();
-  final PlayerStatisticsService _playerStatisticsService =
-      PlayerStatisticsService();
+  final SeasonStatisticsService _seasonStatisticsService =
+      SeasonStatisticsService();
   late Future<_PlayerDetailData> _future;
 
   @override
@@ -56,23 +55,37 @@ class _PlayerDetailScreenState
     final fallbackTeamId =
         player.teamInfo.isNotEmpty ? player.teamInfo.first.teamId : null;
     final teamId = widget.teamId ?? fallbackTeamId;
-    if (teamId == null || teamId.isEmpty) {
-      return const _PlayerStats.empty();
-    }
+    final derivedStats = (teamId == null || teamId.isEmpty)
+        ? const _PlayerStats.empty()
+        : await _loadDerivedStatsFromMatches(
+            player: player,
+            teamId: teamId,
+          );
 
-    final derivedStats = await _loadDerivedStatsFromMatches(
-      player: player,
-      teamId: teamId,
-    );
+    final eventGoalTotal = await _loadPlayerGoalsFromScorerSummary(player.id);
+    return eventGoalTotal == null
+        ? derivedStats
+        : derivedStats.copyWith(goals: eventGoalTotal);
+  }
 
+  Future<int?> _loadPlayerGoalsFromScorerSummary(String playerId) async {
     try {
-      final stats = await _playerStatisticsService.getByPlayerSeason(
-        player.id,
+      final categories = await _seasonStatisticsService.getScorersSummary(
         widget.seasonId,
       );
-      return derivedStats.applySeasonStatistics(stats);
+
+      var totalGoals = 0;
+      for (final category in categories) {
+        for (final scorer in category.topPlayers) {
+          if (scorer.playerId == playerId) {
+            totalGoals += scorer.goals;
+          }
+        }
+      }
+
+      return totalGoals;
     } catch (_) {
-      return derivedStats;
+      return null;
     }
   }
 
@@ -524,19 +537,31 @@ class _PlayerStats {
         subIns = 0,
         subOuts = 0;
 
-  _PlayerStats applySeasonStatistics(PlayerStatistics stats) {
+  _PlayerStats copyWith({
+    int? matchesPlayed,
+    int? starts,
+    int? goals,
+    int? assists,
+    int? ownGoals,
+    int? yellowCards,
+    int? redCards,
+    int? totalCards,
+    int? suspensions,
+    int? subIns,
+    int? subOuts,
+  }) {
     return _PlayerStats(
-      matchesPlayed: matchesPlayed,
-      starts: starts,
-      goals: stats.goals,
-      assists: stats.assists,
-      ownGoals: ownGoals,
-      yellowCards: stats.yellowCards,
-      redCards: stats.redCards,
-      totalCards: stats.totalCards,
-      suspensions: stats.redCards,
-      subIns: subIns,
-      subOuts: subOuts,
+      matchesPlayed: matchesPlayed ?? this.matchesPlayed,
+      starts: starts ?? this.starts,
+      goals: goals ?? this.goals,
+      assists: assists ?? this.assists,
+      ownGoals: ownGoals ?? this.ownGoals,
+      yellowCards: yellowCards ?? this.yellowCards,
+      redCards: redCards ?? this.redCards,
+      totalCards: totalCards ?? this.totalCards,
+      suspensions: suspensions ?? this.suspensions,
+      subIns: subIns ?? this.subIns,
+      subOuts: subOuts ?? this.subOuts,
     );
   }
 }
