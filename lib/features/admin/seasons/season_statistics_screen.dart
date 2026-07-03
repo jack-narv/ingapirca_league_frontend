@@ -2,18 +2,16 @@ import 'package:flutter/material.dart';
 import '../../../core/navigation/season_bottom_nav.dart';
 import '../../../core/widgets/app_scaffold_with_nav.dart';
 import '../../../models/match.dart';
-import '../../../models/match_event.dart';
 import '../../../models/match_lineup.dart';
 import '../../../models/player.dart';
-import '../../../models/player_statistics.dart';
 import '../../../models/season.dart';
 import '../../../models/season_category.dart';
+import '../../../models/season_scorer_summary.dart';
 import '../../../models/team.dart';
-import '../../../services/match_events_service.dart';
 import '../../../services/match_lineups_service.dart';
 import '../../../services/matches_service.dart';
 import '../../../services/players_service.dart';
-import '../../../services/player_statistics_service.dart';
+import '../../../services/season_statistics_service.dart';
 import '../../../services/seasons_service.dart';
 import '../../../services/teams_service.dart';
 
@@ -34,13 +32,12 @@ class SeasonStatisticsScreen extends StatefulWidget {
 
 class _SeasonStatisticsScreenState extends State<SeasonStatisticsScreen> {
   final MatchesService _matchesService = MatchesService();
-  final MatchEventsService _eventsService = MatchEventsService();
   final MatchLineupsService _lineupsService = MatchLineupsService();
   final TeamsService _teamsService = TeamsService();
   final SeasonsService _seasonsService = SeasonsService();
   final PlayersService _playersService = PlayersService();
-  final PlayerStatisticsService _playerStatisticsService =
-      PlayerStatisticsService();
+  final SeasonStatisticsService _seasonStatisticsService =
+      SeasonStatisticsService();
 
   late Future<_SeasonStatsData> _future;
 
@@ -64,35 +61,10 @@ class _SeasonStatisticsScreenState extends State<SeasonStatisticsScreen> {
     final teams = await _safeGetTeams();
     final categories = await _safeGetCategories();
     final players = await _safeGetPlayers();
-    final seasonPlayerStatistics =
-        await _safeGetPlayerStatisticsBySeason();
-    final categoryPlayerStatistics = <String, List<PlayerStatistics>>{};
-    if (categories.isNotEmpty) {
-      final categoryResults = await Future.wait(
-        categories.map((c) async {
-          final stats = await _safeGetPlayerStatisticsBySeason(
-            categoryId: c.id,
-          );
-          return MapEntry(c.id, stats);
-        }),
-      );
-      for (final entry in categoryResults) {
-        categoryPlayerStatistics[entry.key] = entry.value;
-      }
-    }
+    final scorerCategories = await _safeGetScorerCategories();
 
     final playedMatches =
         matches.where((m) => m.status.toUpperCase() == 'PLAYED').toList();
-    final eventResults = await Future.wait(
-      playedMatches.map((match) async {
-        try {
-          return await _eventsService.getTimeline(match.id);
-        } catch (_) {
-          return <MatchEvent>[];
-        }
-      }),
-    );
-
     final lineupResults = await Future.wait(
       playedMatches.map((match) async {
         final home = await _safeGetLineup(match.id, match.homeTeamId);
@@ -123,9 +95,7 @@ class _SeasonStatisticsScreenState extends State<SeasonStatisticsScreen> {
       teams: teams,
       categories: categories,
       players: players,
-      seasonPlayerStatistics: seasonPlayerStatistics,
-      categoryPlayerStatistics: categoryPlayerStatistics,
-      events: eventResults.expand((e) => e).toList(),
+      scorerCategories: scorerCategories,
       lineupPlayers: lineupResults.expand((e) => e).toList(),
     );
   }
@@ -154,16 +124,11 @@ class _SeasonStatisticsScreenState extends State<SeasonStatisticsScreen> {
     }
   }
 
-  Future<List<PlayerStatistics>> _safeGetPlayerStatisticsBySeason({
-    String? categoryId,
-  }) async {
+  Future<List<SeasonScorerCategory>> _safeGetScorerCategories() async {
     try {
-      return await _playerStatisticsService.getBySeason(
-        widget.season.id,
-        categoryId: categoryId,
-      );
+      return await _seasonStatisticsService.getScorersSummary(widget.season.id);
     } catch (_) {
-      return <PlayerStatistics>[];
+      return <SeasonScorerCategory>[];
     }
   }
 
@@ -748,6 +713,7 @@ class _SeasonStatisticsScreenState extends State<SeasonStatisticsScreen> {
             playerName: prev.playerName,
             teamId: prev.teamId,
             teamName: prev.teamName,
+            shirtNumber: prev.shirtNumber ?? player.shirtNumber,
             goals: prev.goals + player.goals,
           );
         }
@@ -841,9 +807,7 @@ class _SeasonStatsData {
   final List<Team> teams;
   final List<SeasonCategory> categories;
   final List<Player> players;
-  final List<PlayerStatistics> seasonPlayerStatistics;
-  final Map<String, List<PlayerStatistics>> categoryPlayerStatistics;
-  final List<MatchEvent> events;
+  final List<SeasonScorerCategory> scorerCategories;
   final List<_LineupPlayerSnapshot> lineupPlayers;
 
   _SeasonStatsData({
@@ -851,9 +815,7 @@ class _SeasonStatsData {
     required this.teams,
     required this.categories,
     required this.players,
-    required this.seasonPlayerStatistics,
-    required this.categoryPlayerStatistics,
-    required this.events,
+    required this.scorerCategories,
     required this.lineupPlayers,
   });
 }
@@ -909,7 +871,6 @@ class _SeasonStats {
     };
     final teamById = {for (final team in data.teams) team.id: team};
     final playerById = {for (final player in data.players) player.id: player};
-    final matchById = {for (final match in data.matches) match.id: match};
 
     final matches = data.matches;
     final totalMatches = matches.length;
@@ -917,8 +878,14 @@ class _SeasonStats {
         matches.where((m) => m.status.toUpperCase() == 'PLAYED').length;
     final scheduledMatches =
         matches.where((m) => m.status.toUpperCase() == 'SCHEDULED').length;
-    final playingMatches =
-        matches.where((m) => m.status.toUpperCase() == 'PLAYING').length;
+    final playingStatuses = {
+      'PLAYING_FIRST_HALF',
+      'HALF_TIME',
+      'PLAYING_SECOND_HALF',
+    };
+    final playingMatches = matches
+        .where((m) => playingStatuses.contains(m.status.toUpperCase()))
+        .length;
     final canceledMatches =
         matches.where((m) => m.status.toUpperCase() == 'CANCELED').length;
 
@@ -979,20 +946,10 @@ class _SeasonStats {
     }).toList()
       ..sort((a, b) => b.matches.compareTo(a.matches));
 
-    final scorerCategories = data.seasonPlayerStatistics.isNotEmpty ||
-            data.categoryPlayerStatistics.values.any((v) => v.isNotEmpty)
-        ? _buildScorerCategoriesFromPlayerStatistics(
-            data: data,
-            categoryById: categoryById,
-            teamById: teamById,
-          )
-        : _buildScorerCategories(
-            data: data,
-            categoryById: categoryById,
-            teamById: teamById,
-            playerById: playerById,
-            matchById: matchById,
-          );
+    final scorerCategories = _buildScorerCategories(
+      data: data,
+      scorerCategories: data.scorerCategories,
+    );
 
     final mvpCategories = _buildMvpCategories(
       data: data,
@@ -1018,196 +975,72 @@ class _SeasonStats {
     );
   }
 
-  static List<_CategoryScorers> _buildScorerCategoriesFromPlayerStatistics({
-    required _SeasonStatsData data,
-    required Map<String, String> categoryById,
-    required Map<String, Team> teamById,
-  }) {
-    final teamByPlayerId = <String, String>{};
-    for (final lp in data.lineupPlayers) {
-      if (lp.playerId.trim().isEmpty) continue;
-      teamByPlayerId.putIfAbsent(lp.playerId, () => lp.teamId);
-    }
-
-    final categoryKeys = <String>{
-      ...data.categories.map((c) => c.id),
-      ...data.categoryPlayerStatistics.keys,
-    }.toList()
-      ..sort((a, b) {
-        final nameA = categoryById[a] ?? 'Sin categoria';
-        final nameB = categoryById[b] ?? 'Sin categoria';
-        return nameA.compareTo(nameB);
-      });
-
-    return categoryKeys.map((categoryId) {
-      final stats = data.categoryPlayerStatistics[categoryId] ?? <PlayerStatistics>[];
-      final entries = stats.map((s) {
-        final playerId = s.playerId.trim();
-        final playerName = s.player?.fullName ?? playerId;
-        final teamId = teamByPlayerId[playerId] ?? 'unknown';
-        final teamName = teamById[teamId]?.name ??
-            (teamId == 'unknown' ? 'Sin equipo' : teamId);
-        return _ScorerEntry(
-          playerId: playerId,
-          playerName: playerName,
-          teamId: teamId,
-          teamName: teamName,
-          goals: s.goals,
-        );
-      }).toList()
-        ..sort((a, b) {
-          final byGoals = b.goals.compareTo(a.goals);
-          if (byGoals != 0) return byGoals;
-          return a.playerName.compareTo(b.playerName);
-        });
-
-      final byTeam = <String, List<_ScorerEntry>>{};
-      for (final entry in entries) {
-        byTeam.putIfAbsent(entry.teamId, () => <_ScorerEntry>[]).add(entry);
-      }
-
-      final teams = byTeam.entries.map((entry) {
-        final players = entry.value;
-        final totalGoals =
-            players.fold<int>(0, (acc, player) => acc + player.goals);
-        return _TeamScorers(
-          teamId: entry.key,
-          teamName: teamById[entry.key]?.name ??
-              (entry.key == 'unknown' ? 'Sin equipo' : entry.key),
-          totalGoals: totalGoals,
-          players: players,
-        );
-      }).toList()
-        ..sort((a, b) => a.teamName.compareTo(b.teamName));
-
-      return _CategoryScorers(
-        categoryId: categoryId,
-        categoryName: categoryById[categoryId] ?? 'Sin categoria',
-        teams: teams,
-        topPlayers: entries,
-      );
-    }).toList();
-  }
-
   static List<_CategoryScorers> _buildScorerCategories({
     required _SeasonStatsData data,
-    required Map<String, String> categoryById,
-    required Map<String, Team> teamById,
-    required Map<String, Player> playerById,
-    required Map<String, Match> matchById,
+    required List<SeasonScorerCategory> scorerCategories,
   }) {
-    final goalsByCategoryTeamPlayer =
-        <String, Map<String, Map<String, _ScorerEntry>>>{};
-
-    for (final event in data.events) {
-      if (event.eventType.toUpperCase() != 'GOAL') continue;
-      final match = matchById[event.matchId];
-      if (match == null) continue;
-
-      final categoryId = match.categoryId ?? 'none';
-      final teamId = event.teamId.trim();
-      if (teamId.isEmpty) continue;
-
-      final playerId = event.playerId.trim();
-      final playerFromStore = playerById[playerId];
-      final playerNameFromStore = playerFromStore == null
-          ? ''
-          : "${playerFromStore.firstName} ${playerFromStore.lastName}".trim();
-      final eventName = (event.playerName ?? '').trim();
-      final playerName = eventName.isNotEmpty
-          ? eventName
-          : (playerNameFromStore.isNotEmpty
-              ? playerNameFromStore
-              : (playerId.isNotEmpty ? playerId : 'Jugador'));
-      final playerKey = playerId.isNotEmpty ? playerId : "name:$playerName";
-      final teamName = teamById[teamId]?.name ?? teamId;
-
-      final playerBucket = goalsByCategoryTeamPlayer
-          .putIfAbsent(categoryId, () => <String, Map<String, _ScorerEntry>>{})
-          .putIfAbsent(teamId, () => <String, _ScorerEntry>{});
-
-      final prev = playerBucket[playerKey];
-      if (prev == null) {
-        playerBucket[playerKey] = _ScorerEntry(
-          playerId: playerId,
-          playerName: playerName,
-          teamId: teamId,
-          teamName: teamName,
-          goals: 1,
-        );
-      } else {
-        playerBucket[playerKey] = _ScorerEntry(
-          playerId: prev.playerId,
-          playerName: prev.playerName,
-          teamId: prev.teamId,
-          teamName: prev.teamName,
-          goals: prev.goals + 1,
-        );
+    final lineupByPlayerId = <String, _LineupPlayerSnapshot>{};
+    for (final lineup in data.lineupPlayers) {
+      if (lineup.playerId.trim().isEmpty) continue;
+      final current = lineupByPlayerId[lineup.playerId];
+      if (current == null ||
+          (current.shirtNumber <= 0 && lineup.shirtNumber > 0)) {
+        lineupByPlayerId[lineup.playerId] = lineup;
       }
     }
 
-    final categoryKeys = <String>{
-      ...data.categories.map((c) => c.id),
-      ...goalsByCategoryTeamPlayer.keys,
-      ...data.teams.map((t) => t.categoryId ?? 'none'),
-    }.toList()
-      ..sort((a, b) {
-        final nameA = categoryById[a] ?? 'Sin categoria';
-        final nameB = categoryById[b] ?? 'Sin categoria';
-        return nameA.compareTo(nameB);
-      });
+    return scorerCategories.map((category) {
+      final teams = category.teams
+          .map(
+            (team) => _TeamScorers(
+              teamId: team.teamId,
+              teamName: team.teamName,
+              totalGoals: team.totalGoals,
+              players: team.players
+                  .map(
+                    (player) => _ScorerEntry(
+                      playerId: player.playerId,
+                      playerName: player.playerName,
+                      teamId: player.teamId,
+                      teamName: player.teamName,
+                      shirtNumber:
+                          _resolveScorerShirtNumber(lineupByPlayerId, player),
+                      goals: player.goals,
+                    ),
+                  )
+                  .toList(),
+            ),
+          )
+          .toList();
 
-    return categoryKeys.map((categoryId) {
-      final teamsForCategory = data.teams
-          .where((team) => (team.categoryId ?? 'none') == categoryId)
-          .toList()
-        ..sort((a, b) => a.name.compareTo(b.name));
-
-      final goalsByTeam =
-          goalsByCategoryTeamPlayer[categoryId] ?? <String, Map<String, _ScorerEntry>>{};
-
-      final teamIds = <String>{
-        ...teamsForCategory.map((t) => t.id),
-        ...goalsByTeam.keys,
-      }.toList()
-        ..sort((a, b) {
-          final nameA = teamById[a]?.name ?? a;
-          final nameB = teamById[b]?.name ?? b;
-          return nameA.compareTo(nameB);
-        });
-
-      final teams = teamIds.map((teamId) {
-        final players = (goalsByTeam[teamId]?.values.toList() ?? <_ScorerEntry>[])
-          ..sort((a, b) {
-            final byGoals = b.goals.compareTo(a.goals);
-            if (byGoals != 0) return byGoals;
-            return a.playerName.compareTo(b.playerName);
-          });
-        final totalGoals =
-            players.fold<int>(0, (acc, player) => acc + player.goals);
-
-        return _TeamScorers(
-          teamId: teamId,
-          teamName: teamById[teamId]?.name ?? teamId,
-          totalGoals: totalGoals,
-          players: players,
-        );
-      }).toList();
-
-      final topPlayers = teams.expand((t) => t.players).toList()
-        ..sort((a, b) {
-          final byGoals = b.goals.compareTo(a.goals);
-          if (byGoals != 0) return byGoals;
-          return a.playerName.compareTo(b.playerName);
-        });
+      final topPlayers = category.topPlayers
+          .map(
+            (player) => _ScorerEntry(
+              playerId: player.playerId,
+              playerName: player.playerName,
+              teamId: player.teamId,
+              teamName: player.teamName,
+              shirtNumber: _resolveScorerShirtNumber(lineupByPlayerId, player),
+              goals: player.goals,
+            ),
+          )
+          .toList();
 
       return _CategoryScorers(
-        categoryId: categoryId,
-        categoryName: categoryById[categoryId] ?? 'Sin categoria',
+        categoryId: category.categoryId,
+        categoryName: category.categoryName,
         teams: teams,
         topPlayers: topPlayers,
       );
     }).toList();
+  }
+
+  static int? _resolveScorerShirtNumber(
+    Map<String, _LineupPlayerSnapshot> lineupByPlayerId,
+    SeasonScorerPlayer player,
+  ) {
+    final shirtNumber = lineupByPlayerId[player.playerId]?.shirtNumber;
+    return (shirtNumber ?? 0) > 0 ? shirtNumber : null;
   }
 
   static List<_CategoryMvp> _buildMvpCategories({
@@ -1418,6 +1251,7 @@ class _ScorerEntry {
   final String playerName;
   final String teamId;
   final String teamName;
+  final int? shirtNumber;
   final int goals;
 
   _ScorerEntry({
@@ -1425,6 +1259,7 @@ class _ScorerEntry {
     required this.playerName,
     required this.teamId,
     required this.teamName,
+    required this.shirtNumber,
     required this.goals,
   });
 }
@@ -1761,6 +1596,82 @@ class _ModernTableCard extends StatelessWidget {
   }
 }
 
+class _CompactTableHeader extends StatelessWidget {
+  final List<Widget> children;
+
+  const _CompactTableHeader({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.only(bottom: 8),
+      decoration: const BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: Colors.white70, width: 1),
+        ),
+      ),
+      child: Row(children: children),
+    );
+  }
+}
+
+class _CompactTableRow extends StatelessWidget {
+  final List<Widget> children;
+
+  const _CompactTableRow({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: const BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: Colors.white24, width: 0.8),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: children,
+      ),
+    );
+  }
+}
+
+class _CompactCell extends StatelessWidget {
+  final String text;
+  final int flex;
+  final bool isHeader;
+  final TextAlign align;
+
+  const _CompactCell({
+    required this.text,
+    required this.flex,
+    this.isHeader = false,
+    this.align = TextAlign.left,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      flex: flex,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: Text(
+          text,
+          textAlign: align,
+          softWrap: true,
+          style: TextStyle(
+            fontSize: 9.5,
+            fontWeight: isHeader ? FontWeight.w600 : FontWeight.w400,
+            color: isHeader ? Colors.white : Colors.white.withValues(alpha: 0.92),
+            height: 1.15,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ScorerDataTable extends StatelessWidget {
   final List<_ScorerEntry> entries;
 
@@ -1768,51 +1679,57 @@ class _ScorerDataTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minWidth: constraints.maxWidth),
-            child: DataTable(
-              headingRowHeight: 36,
-              dataRowMinHeight: 36,
-              dataRowMaxHeight: 42,
-              horizontalMargin: 8,
-              columnSpacing: 12,
-              columns: const [
-                DataColumn(label: Text("#")),
-                DataColumn(label: Text("Jugador")),
-                DataColumn(label: Text("Equipo")),
-                DataColumn(label: Text("Goles")),
-              ],
-              rows: List.generate(entries.length, (index) {
-                final entry = entries[index];
-                return DataRow(
-                  cells: [
-                    DataCell(Text("${index + 1}")),
-                    DataCell(
-                      SizedBox(
-                        width: 120,
-                        child:
-                            Text(entry.playerName, overflow: TextOverflow.ellipsis),
-                      ),
-                    ),
-                    DataCell(
-                      SizedBox(
-                        width: 100,
-                        child: Text(entry.teamName, overflow: TextOverflow.ellipsis),
-                      ),
-                    ),
-                    DataCell(Text("${entry.goals}")),
-                  ],
-                );
-              }),
+    return Column(
+      children: [
+        const _CompactTableHeader(
+          children: [
+            _CompactCell(
+              text: "#",
+              flex: 8,
+              isHeader: true,
+              align: TextAlign.center,
             ),
-          ),
-        );
-      },
+            _CompactCell(text: "Jugador", flex: 34, isHeader: true),
+            _CompactCell(text: "Equipo", flex: 24, isHeader: true),
+            _CompactCell(
+              text: "Dorsal",
+              flex: 14,
+              isHeader: true,
+              align: TextAlign.center,
+            ),
+            _CompactCell(
+              text: "Goles",
+              flex: 20,
+              isHeader: true,
+              align: TextAlign.center,
+            ),
+          ],
+        ),
+        ...List.generate(entries.length, (index) {
+          final entry = entries[index];
+          return _CompactTableRow(
+            children: [
+              _CompactCell(
+                text: "${index + 1}",
+                flex: 8,
+                align: TextAlign.center,
+              ),
+              _CompactCell(text: entry.playerName, flex: 34),
+              _CompactCell(text: entry.teamName, flex: 24),
+              _CompactCell(
+                text: entry.shirtNumber?.toString() ?? "--",
+                flex: 14,
+                align: TextAlign.center,
+              ),
+              _CompactCell(
+                text: "${entry.goals}",
+                flex: 20,
+                align: TextAlign.center,
+              ),
+            ],
+          );
+        }),
+      ],
     );
   }
 }
