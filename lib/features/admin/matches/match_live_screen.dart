@@ -60,6 +60,7 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
   StreamSubscription? _scoreSub;
   StreamSubscription? _eventSub;
   StreamSubscription? _finishSub;
+  StreamSubscription? _periodSub;
 
   @override
   void initState() {
@@ -90,6 +91,10 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
       _setMatchStatus('PLAYING_SECOND_HALF');
     });
 
+    _periodSub = _socketService.periodStarted$.listen((data) {
+      _setMatchStatus(data['status'].toString());
+    });
+
     _scoreSub = _socketService.score$.listen((data) {
       if (!mounted) return;
 
@@ -105,6 +110,8 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
     _eventSub = _socketService.event$.listen((event) {
       if (!mounted) return;
       setState(() {
+        final id = event['id'];
+        if (id != null && _events.any((e) => e['id'] == id)) return;
         _events.insert(0, _decorateEvent(event));
       });
     });
@@ -135,6 +142,8 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
         homeScore: _homeScore,
         awayScore: _awayScore,
         observations: _match!.observations,
+        homePenaltyScore: _match!.homePenaltyScore,
+        awayPenaltyScore: _match!.awayPenaltyScore,
         bestPlayerId: _match!.bestPlayerId,
         bestGoalkeeperId: _match!.bestGoalkeeperId,
       );
@@ -358,6 +367,7 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
     _scoreSub?.cancel();
     _eventSub?.cancel();
     _finishSub?.cancel();
+    _periodSub?.cancel();
     _socketService.dispose();
     super.dispose();
   }
@@ -452,6 +462,15 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
     );
   }
 
+  String get _liveScoreLabel {
+    final penalties = _events.where((e) => (e['event_type'] ?? e['type']) == 'PENALTY_CONVERTED');
+    final showPenalties = _match?.status == 'PENALTIES' || (_match?.status == 'PLAYED' && (_match?.hasPenalties == true || penalties.isNotEmpty));
+    if (!showPenalties) return '$_homeScore - $_awayScore';
+    final home = penalties.where((e) => e['team_id'] == _match?.homeTeamId).length;
+    final away = penalties.where((e) => e['team_id'] == _match?.awayTeamId).length;
+    return '($home) $_homeScore - $_awayScore ($away)';
+  }
+
   Widget _buildScoreboard() {
     final homeName = _homeTeam?.name ?? 'Local';
     final awayName = _awayTeam?.name ?? 'Visitante';
@@ -505,12 +524,18 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
                 ),
               ),
               const SizedBox(width: 10),
-              Text(
-                '$_homeScore  -  $_awayScore',
-                style: TextStyle(
-                  fontSize: 42,
-                  fontWeight: FontWeight.bold,
-                  color: _connected ? Colors.greenAccent : Colors.white,
+              Flexible(
+                flex: 2,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                      _liveScoreLabel,
+                      style: TextStyle(
+                        fontSize: 42,
+                        fontWeight: FontWeight.bold,
+                        color: _connected ? Colors.greenAccent : Colors.white,
+                      ),
+              ),
                 ),
               ),
               const SizedBox(width: 10),
@@ -749,6 +774,9 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
 
   IconData _eventIcon(String type) {
     switch (_normalizeEventType(type)) {
+      case 'PENALTY_MISSED':
+        return Icons.cancel_outlined;
+      case 'PENALTY_CONVERTED':
       case 'GOAL':
         return Icons.sports_soccer;
       case 'YELLOW_CARD':
@@ -770,6 +798,9 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
 
   Color _eventColor(String type) {
     switch (_normalizeEventType(type)) {
+      case 'PENALTY_MISSED':
+        return Colors.redAccent;
+      case 'PENALTY_CONVERTED':
       case 'GOAL':
         return Colors.greenAccent;
       case 'YELLOW_CARD':
@@ -791,6 +822,10 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
 
   String _eventLabelEs(String type) {
     switch (_normalizeEventType(type)) {
+      case 'PENALTY_CONVERTED':
+        return 'PENAL CONVERTIDO';
+      case 'PENALTY_MISSED':
+        return 'PENAL FALLADO';
       case 'GOAL':
         return 'GOL';
       case 'YELLOW':
@@ -885,13 +920,24 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
   bool _isPlayingHalf(String? status) {
     final normalized = (status ?? '').toUpperCase();
     return normalized == 'PLAYING_FIRST_HALF' ||
-        normalized == 'PLAYING_SECOND_HALF';
+        normalized == 'PLAYING_SECOND_HALF' ||
+        normalized == 'PLAYING_FIRST_EXTRA_HALF' ||
+        normalized == 'PLAYING_SECOND_EXTRA_HALF' ||
+        normalized == 'PENALTIES';
   }
 
   String _statusLabelEs(String status) {
     switch (status.toUpperCase()) {
       case 'PLAYING_FIRST_HALF':
         return 'JUGANDO PRIMER TIEMPO';
+      case 'PLAYING_FIRST_EXTRA_HALF':
+        return 'JUGANDO PRIMER TIEMPO EXTRA';
+      case 'PLAYING_SECOND_EXTRA_HALF':
+        return 'JUGANDO SEGUNDO TIEMPO EXTRA';
+      case 'EXTRA_HALF_TIME':
+        return 'DESCANSO TIEMPO EXTRA';
+      case 'PENALTIES':
+        return 'PENALES';
       case 'PLAYING_SECOND_HALF':
         return 'JUGANDO SEGUNDO TIEMPO';
       case 'HALF_TIME':
@@ -910,10 +956,13 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
   Color _statusTextColor(String status) {
     final normalized = status.toUpperCase();
     if (normalized == 'PLAYING_FIRST_HALF' ||
-        normalized == 'PLAYING_SECOND_HALF') {
+        normalized == 'PLAYING_SECOND_HALF' ||
+        normalized == 'PLAYING_FIRST_EXTRA_HALF' ||
+        normalized == 'PLAYING_SECOND_EXTRA_HALF' ||
+        normalized == 'PENALTIES') {
       return Colors.greenAccent;
     }
-    if (normalized == 'HALF_TIME') return Colors.amber;
+    if (normalized == 'HALF_TIME' || normalized == 'EXTRA_HALF_TIME') return Colors.amber;
     if (normalized == 'PLAYED') return Colors.blueAccent;
     if (normalized == 'CANCELED') return Colors.redAccent;
     return Colors.white70;

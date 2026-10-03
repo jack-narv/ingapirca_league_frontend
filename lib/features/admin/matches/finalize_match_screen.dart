@@ -563,12 +563,21 @@ class _FinalizeMatchScreenState
               fontSize: 16,
             ),
           ),
+          if (widget.match.status == 'PENALTIES') ...[
+            const SizedBox(height: 12),
+            Text(
+              '(${widget.match.homePenaltyScore ?? 0}) ${_homeScoreController.text} - ${_awayScoreController.text} (${widget.match.awayPenaltyScore ?? 0})',
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            ),
+            const Text('Resultado de penales registrados en vivo', style: TextStyle(color: Colors.white70)),
+          ],
           const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
                 child: TextField(
                   controller: _homeScoreController,
+                  onChanged: (_) => setState(() {}),
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
                     labelText: 'Goles ${widget.homeTeamName}',
@@ -579,6 +588,7 @@ class _FinalizeMatchScreenState
               Expanded(
                 child: TextField(
                   controller: _awayScoreController,
+                  onChanged: (_) => setState(() {}),
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
                     labelText: 'Goles ${widget.awayTeamName}',
