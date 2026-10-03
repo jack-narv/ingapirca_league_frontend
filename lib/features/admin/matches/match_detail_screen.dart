@@ -83,6 +83,9 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
   StreamSubscription? _eventSub;
   StreamSubscription? _startSub;
   StreamSubscription? _finishSub;
+  StreamSubscription? _periodSub;
+  StreamSubscription? _halfTimeSub;
+  StreamSubscription? _secondHalfSub;
 
   bool _loading = false;
   bool _isEditingObservationDialogOpen = false;
@@ -111,6 +114,9 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
     _eventSub?.cancel();
     _startSub?.cancel();
     _finishSub?.cancel();
+    _periodSub?.cancel();
+    _halfTimeSub?.cancel();
+    _secondHalfSub?.cancel();
     _socketService.dispose();
     super.dispose();
   }
@@ -138,6 +144,9 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
     await _socketService.connect();
     _socketService.joinMatch(_match.id);
 
+    _periodSub = _socketService.periodStarted$.listen((_) => _reloadMatch());
+    _halfTimeSub = _socketService.halfTime$.listen((_) => _reloadMatch());
+    _secondHalfSub = _socketService.secondHalfStarted$.listen((_) => _reloadMatch());
     _startSub = _socketService.matchStarted$.listen((_) {
       if (!mounted) return;
       if (_isEditingObservationDialogOpen) return;
@@ -155,6 +164,8 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
           homeScore: _match.homeScore,
           awayScore: _match.awayScore,
           observations: _match.observations,
+          homePenaltyScore: _match.homePenaltyScore,
+          awayPenaltyScore: _match.awayPenaltyScore,
           bestPlayerId: _match.bestPlayerId,
           bestGoalkeeperId: _match.bestGoalkeeperId,
         );
@@ -183,6 +194,8 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
           awayScore:
               awayValue is int ? awayValue : _match.awayScore,
           observations: _match.observations,
+          homePenaltyScore: _match.homePenaltyScore,
+          awayPenaltyScore: _match.awayPenaltyScore,
           bestPlayerId: _match.bestPlayerId,
           bestGoalkeeperId: _match.bestGoalkeeperId,
         );
@@ -193,6 +206,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
       if (!mounted) return;
       if (_isEditingObservationDialogOpen) return;
       final normalized = _normalizeEvent(event);
+      if ((normalized['event_type'] ?? '').toString().startsWith('PENALTY_')) _reloadMatch();
       setState(() {
         final id = normalized['id']?.toString();
         if (id != null &&
@@ -205,6 +219,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
     });
 
     _finishSub = _socketService.finished$.listen((data) {
+      _reloadMatch();
       if (!mounted) return;
       if (_isEditingObservationDialogOpen) return;
       final hs = data['homeScore'] ?? data['home_score'];
@@ -224,11 +239,18 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
           awayScore:
               awayValue is int ? awayValue : _match.awayScore,
           observations: _match.observations,
+          homePenaltyScore: _match.homePenaltyScore,
+          awayPenaltyScore: _match.awayPenaltyScore,
           bestPlayerId: _match.bestPlayerId,
           bestGoalkeeperId: _match.bestGoalkeeperId,
         );
       });
     });
+  }
+
+  Future<void> _reloadMatch() async {
+    final updated = await _service.getMatch(_match.id);
+    if (mounted) setState(() => _match = updated);
   }
 
   Future<void> _refresh() async {
@@ -475,6 +497,8 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
   }
 
   Future<void> _finishMatchDialog() async {
+    await _reloadMatch();
+    if (!mounted) return;
     final finalized = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
@@ -511,6 +535,22 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
     }
   }
 
+  Future<void> _changePeriod(String action) async {
+    setState(() => _loading = true);
+    try {
+      await _service.changeKnockoutPeriod(_match.id, action);
+      await _refresh();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   Future<void> _cancelMatch() async {
     final confirmed = await _confirmCancelMatch();
     if (!confirmed) return;
@@ -526,7 +566,10 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
 
   bool get _canEditObservationSections =>
       _match.status == 'PLAYING_FIRST_HALF' ||
-      _match.status == 'PLAYING_SECOND_HALF';
+      _match.status == 'PLAYING_SECOND_HALF' ||
+      _match.status == 'PLAYING_FIRST_EXTRA_HALF' ||
+      _match.status == 'PLAYING_SECOND_EXTRA_HALF' ||
+      _match.status == 'PENALTIES';
 
   Future<void> _editVocalObservation() async {
     final controller = TextEditingController(text: _match.observations ?? '');
@@ -1138,16 +1181,22 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
                   alignEnd: false,
                 ),
               ),
-              Text(
-                _match.status == 'SCHEDULED'
-                    ? 'vs'
-                    : '${_match.homeScore} - ${_match.awayScore}',
-                style: TextStyle(
-                  fontSize: 34,
-                  fontWeight: FontWeight.bold,
-                  color: _isPlayingStatus(_match.status)
-                      ? Colors.greenAccent
-                      : Colors.white,
+              Flexible(
+                flex: 2,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                      _match.status == 'SCHEDULED'
+                          ? 'vs'
+                          : _match.scoreLabel,
+                      style: TextStyle(
+                        fontSize: 34,
+                        fontWeight: FontWeight.bold,
+                        color: _isPlayingStatus(_match.status)
+                            ? Colors.greenAccent
+                            : Colors.white,
+                      ),
+              ),
                 ),
               ),
               Expanded(
@@ -1233,11 +1282,6 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
                 onPressed: _loading ? null : _startMatch,
                 child: const Text('Iniciar'),
               ),
-            if (_match.status == 'PLAYING_SECOND_HALF')
-              ElevatedButton(
-                onPressed: _finishMatchDialog,
-                child: const Text('Finalizar'),
-              ),
             if (_match.status == 'PLAYING_FIRST_HALF')
               ElevatedButton(
                 onPressed: _loading ? null : _endFirstHalf,
@@ -1248,16 +1292,40 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
                 onPressed: _loading ? null : _startSecondHalf,
                 child: const Text('EMPEZAR SEGUNDO TIEMPO'),
               ),
+            if (_match.isKnockout && _match.status == 'PLAYING_SECOND_HALF')
+              ElevatedButton(
+                onPressed: _loading ? null : () => _changePeriod('first-extra-half'),
+                child: const Text('Empezar primer tiempo extra'),
+              ),
+            if (_match.status == 'PLAYING_FIRST_EXTRA_HALF')
+              ElevatedButton(
+                onPressed: _loading ? null : () => _changePeriod('extra-half-time'),
+                child: const Text('DESCANSO'),
+              ),
+            if (_match.status == 'PLAYING_FIRST_EXTRA_HALF' || _match.status == 'EXTRA_HALF_TIME')
+              ElevatedButton(
+                onPressed: _loading ? null : () => _changePeriod('second-extra-half'),
+                child: const Text('Empezar segundo tiempo extra'),
+              ),
+            if (_match.isKnockout && _match.status == 'PLAYING_SECOND_EXTRA_HALF')
+              ElevatedButton(
+                onPressed: _loading ? null : () => _changePeriod('penalties'),
+                child: const Text('Empezar Penalties'),
+              ),
+            if (['PLAYING_SECOND_HALF', 'PLAYING_SECOND_EXTRA_HALF', 'PENALTIES'].contains(_match.status))
+              ElevatedButton(
+                onPressed: _loading ? null : _finishMatchDialog,
+                child: const Text('Finalizar'),
+              ),
             if (_match.status != 'PLAYED')
               TextButton(
                 onPressed: _loading ? null : _cancelMatch,
                 child: const Text('Cancelar'),
               ),
-            if (_match.status == 'PLAYING_FIRST_HALF' ||
-                _match.status == 'PLAYING_SECOND_HALF')
+            if (_canEditObservationSections)
               OutlinedButton(
-                onPressed: () {
-                  Navigator.push(
+                onPressed: () async {
+                  await Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (_) => LiveMatchScreen(
@@ -1267,6 +1335,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
                       ),
                     ),
                   );
+                  if (mounted) await _refresh();
                 },
                 child: const Text('Gestionar En Vivo'),
               ),
@@ -2637,6 +2706,9 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
 
   IconData _eventIcon(String type) {
     switch (_normalizeEventType(type)) {
+      case 'PENALTY_MISSED':
+        return Icons.cancel_outlined;
+      case 'PENALTY_CONVERTED':
       case 'GOAL':
         return Icons.sports_soccer;
       case 'YELLOW_CARD':
@@ -2658,6 +2730,9 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
 
   Color _eventColor(String type) {
     switch (_normalizeEventType(type)) {
+      case 'PENALTY_MISSED':
+        return Colors.redAccent;
+      case 'PENALTY_CONVERTED':
       case 'GOAL':
         return Colors.greenAccent;
       case 'YELLOW_CARD':
@@ -2679,6 +2754,10 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
 
   String _eventLabelEs(String type) {
     switch (_normalizeEventType(type)) {
+      case 'PENALTY_CONVERTED':
+        return 'PENAL CONVERTIDO';
+      case 'PENALTY_MISSED':
+        return 'PENAL FALLADO';
       case 'GOAL':
         return 'GOL';
       case 'YELLOW':
@@ -2772,13 +2851,14 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
 
   Widget _buildMinuteBadge(String minuteRaw) {
     final minuteText = minuteRaw.trim();
-    final match = RegExp(r'^(\d+)\s*([12])t$', caseSensitive: false)
+    if (minuteText.isEmpty) return const SizedBox.shrink();
+    final match = RegExp(r'^(\d+)\s*([12]te?)$', caseSensitive: false)
         .firstMatch(minuteText);
 
     final displayMain = match != null
         ? "${match.group(1)}'"
         : (minuteText.isEmpty ? '--' : minuteText);
-    final displayHalf = match != null ? "${match.group(2)}t" : null;
+    final displayHalf = match?.group(2);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -2885,6 +2965,14 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
         return 'DESCANSO';
       case 'PLAYING_FIRST_HALF':
         return 'JUGANDO PRIMER TIEMPO';
+      case 'PLAYING_FIRST_EXTRA_HALF':
+        return 'JUGANDO PRIMER TIEMPO EXTRA';
+      case 'PLAYING_SECOND_EXTRA_HALF':
+        return 'JUGANDO SEGUNDO TIEMPO EXTRA';
+      case 'EXTRA_HALF_TIME':
+        return 'DESCANSO TIEMPO EXTRA';
+      case 'PENALTIES':
+        return 'PENALES';
       case 'PLAYING_SECOND_HALF':
         return 'JUGANDO SEGUNDO TIEMPO';
       case 'PLAYING':
@@ -2912,7 +3000,10 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
     final normalized = status.toUpperCase();
     return normalized == 'PLAYING' ||
         normalized == 'PLAYING_FIRST_HALF' ||
-        normalized == 'PLAYING_SECOND_HALF';
+        normalized == 'PLAYING_SECOND_HALF' ||
+        normalized == 'PLAYING_FIRST_EXTRA_HALF' ||
+        normalized == 'PLAYING_SECOND_EXTRA_HALF' ||
+        normalized == 'PENALTIES';
   }
 }
 

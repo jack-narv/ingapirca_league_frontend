@@ -34,7 +34,8 @@ class _AddMatchEventDialogState
   final MatchEventsService _service =
       MatchEventsService();
 
-  int _minute = 0;
+  int? _minute;
+  bool get _isPenalties => widget.matchStatus == 'PENALTIES';
   String _type = 'GOAL';
   bool _loading = false;
 
@@ -52,6 +53,7 @@ class _AddMatchEventDialogState
   @override
   void initState() {
     super.initState();
+    if (_isPenalties) _type = 'PENALTY_CONVERTED';
     _homeLineupSorted = _sortedLineup(widget.homeLineup);
     _awayLineupSorted = _sortedLineup(widget.awayLineup);
     _teamId = widget.homeTeamId;
@@ -80,7 +82,7 @@ class _AddMatchEventDialogState
   }
 
   Future<void> _submit() async {
-    if (_minute < 0 || _minute > 130) {
+    if (!_isPenalties && (_minute == null || _minute! < 0 || _minute! > 130)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Minuto invalido"),
@@ -113,10 +115,10 @@ class _AddMatchEventDialogState
 
     try {
       final formattedMinute = _formattedMinuteByHalf();
-      if (formattedMinute == null) {
+      if (!_isPenalties && formattedMinute == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("Solo puedes registrar eventos en primer o segundo tiempo"),
+            content: Text("Solo puedes registrar eventos durante un tiempo de juego"),
           ),
         );
         return;
@@ -148,6 +150,8 @@ class _AddMatchEventDialogState
     if (status == 'PLAYING_FIRST_HALF') {
       return '$_minute 1t';
     }
+    if (status == 'PLAYING_FIRST_EXTRA_HALF') return '$_minute 1te';
+    if (status == 'PLAYING_SECOND_EXTRA_HALF') return '$_minute 2te';
     if (status == 'PLAYING_SECOND_HALF') {
       return '$_minute 2t';
     }
@@ -191,12 +195,12 @@ class _AddMatchEventDialogState
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(
+              if (!_isPenalties) TextField(
                 keyboardType: TextInputType.number,
                 decoration:
                     const InputDecoration(labelText: "Minuto"),
                 onChanged: (v) =>
-                    _minute = int.tryParse(v) ?? 0,
+                    _minute = int.tryParse(v),
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
@@ -263,7 +267,10 @@ class _AddMatchEventDialogState
               DropdownButtonFormField<String>(
                 isExpanded: true,
                 initialValue: _type,
-                items: const [
+                items: _isPenalties ? const [
+                  DropdownMenuItem(value: 'PENALTY_CONVERTED', child: Text('Penal convertido')),
+                  DropdownMenuItem(value: 'PENALTY_MISSED', child: Text('Penal fallado')),
+                ] : const [
                   DropdownMenuItem(
                       value: 'GOAL', child: Text('Gol')),
                   DropdownMenuItem(

@@ -929,7 +929,7 @@ class _BracketMatchCard extends StatelessWidget {
                 match == null
                     ? 'Por definir'
                     : isPlayedOrPlaying
-                        ? '${match!.homeScore} - ${match!.awayScore}'
+                        ? match!.scoreLabel
                         : 'Por jugar',
                 style: TextStyle(
                   color: isPlayedOrPlaying ? const Color(0xFF22D3EE) : Colors.white70,
