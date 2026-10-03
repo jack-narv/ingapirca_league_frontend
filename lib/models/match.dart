@@ -12,6 +12,8 @@ class Match{
   final String status;
   final int homeScore;
   final int awayScore;
+  final int? homePenaltyScore;
+  final int? awayPenaltyScore;
   final String? observations;
   final String? bestPlayerId;
   final String? bestGoalkeeperId;
@@ -28,10 +30,22 @@ class Match{
     required this.status,
     required this.homeScore,
     required this.awayScore,
+    this.homePenaltyScore,
+    this.awayPenaltyScore,
     this.observations,
     this.bestPlayerId,
     this.bestGoalkeeperId,
   });
+
+  bool get isKnockout => journal != null && journal!.isNotEmpty &&
+      !RegExp(r'^\d+$').hasMatch(journal!) &&
+      !RegExp(r'^JOURNAL\s+\d+$', caseSensitive: false).hasMatch(journal!.trim());
+
+  bool get hasPenalties => homePenaltyScore != null && awayPenaltyScore != null;
+
+  String get scoreLabel => hasPenalties
+      ? '($homePenaltyScore) $homeScore - $awayScore ($awayPenaltyScore)'
+      : '$homeScore - $awayScore';
 
   factory Match.fromJson(Map<String, dynamic> json){
     final rawMatchDate = json['match_date']?.toString() ?? '';
@@ -49,6 +63,8 @@ class Match{
       status: json['status'],
       homeScore: json['home_score'],
       awayScore: json['away_score'],
+      homePenaltyScore: json['home_penalty_score'],
+      awayPenaltyScore: json['away_penalty_score'],
       observations: json['observations'],
       bestPlayerId: json['best_player_id']?.toString(),
       bestGoalkeeperId:

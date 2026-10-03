@@ -221,6 +221,16 @@ class MatchesService {
     }
   }
 
+  Future<void> changeKnockoutPeriod(String matchId, String action) async {
+    final res = await http.patch(
+      Uri.parse('$baseUrl/matches/$matchId/$action'),
+      headers: await _headers(),
+    );
+    if (res.statusCode != 200) {
+      throw Exception(_extractErrorMessage(res, 'Error cambiando el periodo'));
+    }
+  }
+
   Future<void> updateAdminObservationDuringMatch(
     String matchId,
     String? observations,

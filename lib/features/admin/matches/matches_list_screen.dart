@@ -409,7 +409,7 @@ class _MatchesListScreenState
       }
 
       return Text(
-        "${match.homeScore} - ${match.awayScore}",
+        match.scoreLabel,
         style: TextStyle(
           fontSize: 18,
           fontWeight: FontWeight.bold,
@@ -428,9 +428,13 @@ class _MatchesListScreenState
           color = Colors.orange;
           break;
         case 'HALF_TIME':
+        case 'EXTRA_HALF_TIME':
           color = const Color(0xFFE879F9);
           break;
         case 'PLAYING_FIRST_HALF':
+        case 'PLAYING_FIRST_EXTRA_HALF':
+        case 'PLAYING_SECOND_EXTRA_HALF':
+        case 'PENALTIES':
         case 'PLAYING_SECOND_HALF':
         case 'PLAYING':
           color = Colors.green;
@@ -472,7 +476,15 @@ class _MatchesListScreenState
           return 'DESCANSO';
         case 'PLAYING_FIRST_HALF':
           return 'JUGANDO PRIMER TIEMPO';
-        case 'PLAYING_SECOND_HALF':
+        case 'PLAYING_FIRST_EXTRA_HALF':
+        return 'JUGANDO PRIMER TIEMPO EXTRA';
+      case 'PLAYING_SECOND_EXTRA_HALF':
+        return 'JUGANDO SEGUNDO TIEMPO EXTRA';
+      case 'EXTRA_HALF_TIME':
+        return 'DESCANSO TIEMPO EXTRA';
+      case 'PENALTIES':
+        return 'PENALES';
+      case 'PLAYING_SECOND_HALF':
           return 'JUGANDO SEGUNDO TIEMPO';
         case 'PLAYING':
           return 'JUGANDO';
@@ -489,7 +501,10 @@ class _MatchesListScreenState
       final normalized = status.toUpperCase();
       return normalized == 'PLAYING' ||
           normalized == 'PLAYING_FIRST_HALF' ||
-          normalized == 'PLAYING_SECOND_HALF';
+          normalized == 'PLAYING_SECOND_HALF' ||
+        normalized == 'PLAYING_FIRST_EXTRA_HALF' ||
+        normalized == 'PLAYING_SECOND_EXTRA_HALF' ||
+        normalized == 'PENALTIES';
     }
 
     Widget _journalBadge(String journal) {
