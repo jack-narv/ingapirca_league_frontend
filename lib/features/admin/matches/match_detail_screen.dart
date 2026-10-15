@@ -1252,6 +1252,9 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
 
   String _journalLabelEs(String journal) {
     final normalized = journal.trim();
+    if (normalized.toUpperCase() == 'THIRD PLACE') {
+      return 'Tercer Lugar';
+    }
     final match = RegExp(r'^JOURNAL\s+(\d+)$', caseSensitive: false)
         .firstMatch(normalized);
     if (match != null) {

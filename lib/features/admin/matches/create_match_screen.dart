@@ -69,6 +69,7 @@ class _CreateMatchScreenState
     'ROUND OF 8',
     'QUARTERFINALS',
     'SEMIFINAL',
+    'THIRD PLACE',
     'FINAL',
   ];
 
@@ -734,6 +735,7 @@ class _CreateMatchScreenState
       'ROUND OF 8': 'Octavos de Final',
       'QUARTERFINALS': 'Cuartos de final',
       'SEMIFINAL': 'Semifinal',
+      'THIRD PLACE': 'Tercer Lugar',
       'FINAL': 'Final',
     };
     return labels[journal] ?? journal;

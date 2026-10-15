@@ -613,7 +613,8 @@ class _StandingsScreenState extends State<StandingsScreen> {
                           round: round,
                           teamsById: data.teamsById,
                         ),
-                        if (index < rounds.length - 1)
+                        if (index < rounds.length - 1 &&
+                            rounds[index + 1].stage != _KnockoutStage.thirdPlace)
                           const Padding(
                             padding: EdgeInsets.symmetric(horizontal: 10, vertical: 120),
                             child: Icon(
@@ -686,12 +687,27 @@ class _StandingsScreenState extends State<StandingsScreen> {
       );
     }
 
+    // Third place is a separate placement match, outside the progression to final.
+    final thirdPlaceMatches = grouped[_KnockoutStage.thirdPlace.order];
+    if (thirdPlaceMatches != null) {
+      rounds.add(
+        _BracketRound(
+          stage: _KnockoutStage.thirdPlace,
+          slots: thirdPlaceMatches,
+        ),
+      );
+    }
+
     return rounds;
   }
 
   _KnockoutStage? _matchStage(String? journal) {
     final normalized = _normalizeJournalText(journal);
     if (normalized.isEmpty) return null;
+
+    if (normalized == 'THIRD PLACE') {
+      return _KnockoutStage.thirdPlace;
+    }
 
     if (normalized.contains('SEMIFINAL') || normalized.contains('SEMI FINAL')) {
       return _KnockoutStage.semiFinal;
@@ -786,6 +802,10 @@ class _KnockoutStage {
     order: 4,
     label: 'Final',
     isFinal: true,
+  );
+  static const thirdPlace = _KnockoutStage._(
+    order: 5,
+    label: 'Tercer Lugar',
   );
 
   static _KnockoutStage? byOrder(int order) {

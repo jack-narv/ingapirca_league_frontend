@@ -19,6 +19,7 @@ void main() {
   test('uses the backend knockout journal convention', () {
     expect(match().isKnockout, isTrue);
     expect(match(journal: 'SEMIFINAL').isKnockout, isTrue);
+    expect(match(journal: 'THIRD PLACE').isKnockout, isTrue);
     expect(match(journal: 'JOURNAL 1').isKnockout, isFalse);
     expect(match(journal: '1').isKnockout, isFalse);
   });
